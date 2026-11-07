@@ -1,0 +1,41 @@
+module Selection
+in ActiveGeneration: bool
+in SelectButton: FrooxEngine.UIX.Button element
+in RegisteredRoot: FrooxEngine.Slot
+in PendingRoot: FrooxEngine.Slot mutable
+in SelectedRoot: FrooxEngine.Slot mutable
+in Operator: FrooxEngine.User
+in Ready: bool
+in UiReady: bool
+in Busy: bool
+in RecoveryPending: bool
+in PreviewActive: bool
+in OperationStage: int
+in EditEpoch: int mutable
+in Status: string mutable
+out Selected: bool
+where {
+    Selected = SelectedRoot == RegisteredRoot and not IsNull<FrooxEngine.Slot>(Instance=RegisteredRoot);
+    _allowed = ActiveGeneration and UiReady and Ready and not Busy and Operator == LocalUser and not IsNull<FrooxEngine.Slot>(Instance=RegisteredRoot);
+    _idle = not RecoveryPending and not PreviewActive and OperationStage == 0;
+    // Task5 S6a (design-r7 §3.4 Selection, review Minor 1/2, r5 D4/D6): the refusal text names its reason. It is used
+    // only when not _idle, so the last branch (Stage 0, no recovery) is the PreviewActive refusal.
+    // Priority Stage≠0, RecoveryPending, PreviewActive (resolved S6a Q2: controller ruling, ledger 13:35:00Z).
+    _blockedText = if OperationStage != 0 then "使用中 · 処理中です。完了まで待ってください"
+        else if RecoveryPending then "使用中 · 復元が未完了の行があります。元に戻す／キャンセルで再試行するか、その行の『現在値を受け入れて閉じる』で記録を閉じてください"
+        else "使用中 · 未確定のプレビューがあります。OK で確定するか、元に戻す・キャンセルの後に切り替えてください";
+    _select = if _allowed then
+        if not _idle then Status <- _blockedText
+        else if not Selected then impulse {
+            bind _selected = (SelectedRoot <- RegisteredRoot).OnWritten;
+            bind _epoch = (EditEpoch <- EditEpoch + 1).OnWritten;
+            Status <- "使用中 · 編集対象を選択しました";
+        };
+    _request = if _allowed then
+        if PendingRoot == RegisteredRoot then _select
+        else PendingRoot <- RegisteredRoot;
+    _button = as<FrooxEngine.IButton>(SelectButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_request);
+    FireOnRefChange<FrooxEngine.Slot>(OnlyForUser=Operator, Value=PendingRoot,
+        OnChanged=if PendingRoot == RegisteredRoot then _select);
+}

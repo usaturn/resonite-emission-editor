@@ -1,0 +1,25 @@
+module DropGuard
+in PendingRoot: FrooxEngine.Slot
+in Operator: FrooxEngine.User
+in Status: string mutable
+in Root0: FrooxEngine.Slot
+in Root1: FrooxEngine.Slot
+in Root2: FrooxEngine.Slot
+in Root3: FrooxEngine.Slot
+in Root4: FrooxEngine.Slot
+in Root5: FrooxEngine.Slot
+in Root6: FrooxEngine.Slot
+in Root7: FrooxEngine.Slot
+in Root8: FrooxEngine.Slot
+in Root9: FrooxEngine.Slot
+in Root10: FrooxEngine.Slot
+in Root11: FrooxEngine.Slot
+in Root12: FrooxEngine.Slot
+in Root13: FrooxEngine.Slot
+in Root14: FrooxEngine.Slot
+in Root15: FrooxEngine.Slot
+where {
+    _registered = not IsNull<FrooxEngine.Slot>(Instance=PendingRoot) and (PendingRoot == Root0 or PendingRoot == Root1 or PendingRoot == Root2 or PendingRoot == Root3 or PendingRoot == Root4 or PendingRoot == Root5 or PendingRoot == Root6 or PendingRoot == Root7 or PendingRoot == Root8 or PendingRoot == Root9 or PendingRoot == Root10 or PendingRoot == Root11 or PendingRoot == Root12 or PendingRoot == Root13 or PendingRoot == Root14 or PendingRoot == Root15);
+    FireOnRefChange<FrooxEngine.Slot>(OnlyForUser=Operator, Value=PendingRoot,
+        OnChanged=if Operator == LocalUser and not _registered then Status <- "使用中 · 未登録ルートは選択できません");
+}

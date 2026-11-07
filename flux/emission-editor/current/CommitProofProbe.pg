@@ -1,0 +1,198 @@
+module CommitProofProbe
+// Task5 S4 fixture-only producer (design-r7 §5 S4 (a), r7 M-3). Never deployed outside the owned CommitProof root.
+// S3's InputDriverProbe.pg is kept as the S3 record; this is a new source. Each action has its own private trigger int
+// (written once by the CLI); the action then does, natively, what the CLI cannot: operator claim/release (Operator <-
+// LocalUser / NullUser), the Linear HDR seeds of both private Sources, external Source changes that keep the colour
+// profile (derived from the row's LastApplied: R + 0.5, sRGB), the external actor putting row A's Source back to its
+// LastApplied, to its Original (5 components) or to its Original with only the alpha changed, native colorX copies
+// (the unhooked-drive seed and the LastApplied-drive source of row A), and the two 150 ms windows: an input change on
+// row A followed 0.05 s later by the CommitProbe OK trigger (C3), and input changes on rows A and B followed 0.05 s
+// later by the CommitProbe restore trigger (C8, C8b). The input texts come from private string fields set by the CLI.
+// Every write targets an owned private fixture field; the two FieldAsVariable targets are the fixture rows' private
+// Sources (the external actor of the proof). Driven: an unhooked ProtoFlux drive of a private field (C29). Single
+// processing user: the host (every entry OnlyForUser=HostUser). No per-frame entrypoint.
+in Claim: int
+in Release: int
+in Seed: int
+in ExtA: int
+in ExtB: int
+in BackA: int
+in OrigA: int
+in AlphaA: int
+in DriveCopy: int
+in LaCopy: int
+in InputOk: int
+in InputsRestore: int
+in Operator: FrooxEngine.User mutable
+in NullUser: FrooxEngine.User
+in SourceAField: FrooxEngine.IValue<colorX>
+in SourceBField: FrooxEngine.IValue<colorX>
+in InputAR: string mutable
+in InputBR: string mutable
+in TextA: string
+in TextB: string
+in OkPress: int mutable
+in RestorePress: int mutable
+in LastAppliedA: colorX
+in LastAppliedB: colorX
+in OriginalA: colorX
+in DriveSeed: colorX mutable
+in LaSrcA: colorX mutable
+in DoneClaim: int mutable
+in DoneRelease: int mutable
+in DoneSeed: int mutable
+in DoneExtA: int mutable
+in DoneExtB: int mutable
+in DoneBackA: int mutable
+in DoneOrigA: int mutable
+in DoneAlphaA: int mutable
+in DoneDriveCopy: int mutable
+in DoneLaCopy: int mutable
+in DoneInputOk: int mutable
+in DoneInputsRestore: int mutable
+in T0: double mutable
+in T1: double mutable
+in Outcome: int mutable
+out Driven: colorX
+where {
+    _sourceA = FieldAsVariable<colorX>(Field=SourceAField);
+    _sourceB = FieldAsVariable<colorX>(Field=SourceBField);
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    _srgb = IntToEnum<Renderite.Shared.ColorProfile>(1);
+    // HDR, alpha != 1, native Linear (the CLI colorX path would drop the profile). Same seeds as S3.
+    _seedA = Pack_ColorX(R=1.5, G=0.25, B=3.0, A=0.625, Profile=_linear);
+    _seedB = Pack_ColorX(R=2.5, G=0.75, B=0.125, A=0.375, Profile=_linear);
+    // External values: differ from LastApplied in R and normally in the profile (the checker verifies that the written
+    // value differs from both Original and LastApplied before a case relies on it).
+    _laA = Unpack_ColorX(V=LastAppliedA);
+    _laB = Unpack_ColorX(V=LastAppliedB);
+    _extA = Pack_ColorX(R=_laA.R + 0.5, G=_laA.G, B=_laA.B, A=_laA.A, Profile=_srgb);
+    _extB = Pack_ColorX(R=_laB.R + 0.5, G=_laB.G, B=_laB.B, A=_laB.A, Profile=_srgb);
+    // C15: row A's Original with only the alpha changed (R, G, B and Profile kept).
+    _oA = Unpack_ColorX(V=OriginalA);
+    _alphaA = Pack_ColorX(R=_oA.R, G=_oA.G, B=_oA.B, A=0.3125, Profile=_oA.Profile);
+    Driven = DriveSeed;
+
+    _claim = switch (Operator <- LocalUser)
+        | OnWritten |> DoneClaim <- Claim;
+    _release = switch (Operator <- NullUser)
+        | OnWritten |> DoneRelease <- Release;
+
+    _seedDoneOk = impulse {
+        bind _sd0 = (Outcome <- 1).OnWritten;
+        DoneSeed <- Seed;
+    };
+    _seedDoneFail = impulse {
+        bind _sd1 = (Outcome <- 2).OnWritten;
+        DoneSeed <- Seed;
+    };
+    _seedB1 = switch (_sourceB <- _seedB)
+        | OnWritten |> _seedDoneOk
+        | OnFail |> _seedDoneFail;
+    _seed = switch (_sourceA <- _seedA)
+        | OnWritten |> _seedB1
+        | OnFail |> _seedDoneFail;
+
+    // External actor on the private Sources (Outcome 1 written, 2 failed).
+    _extADoneOk = impulse {
+        bind _xa0 = (Outcome <- 1).OnWritten;
+        DoneExtA <- ExtA;
+    };
+    _extADoneFail = impulse {
+        bind _xa1 = (Outcome <- 2).OnWritten;
+        DoneExtA <- ExtA;
+    };
+    _extAWrite = switch (_sourceA <- _extA)
+        | OnWritten |> _extADoneOk
+        | OnFail |> _extADoneFail;
+    _extBDoneOk = impulse {
+        bind _xb0 = (Outcome <- 1).OnWritten;
+        DoneExtB <- ExtB;
+    };
+    _extBDoneFail = impulse {
+        bind _xb1 = (Outcome <- 2).OnWritten;
+        DoneExtB <- ExtB;
+    };
+    _extBWrite = switch (_sourceB <- _extB)
+        | OnWritten |> _extBDoneOk
+        | OnFail |> _extBDoneFail;
+    _backDoneOk = impulse {
+        bind _bk0 = (Outcome <- 1).OnWritten;
+        DoneBackA <- BackA;
+    };
+    _backDoneFail = impulse {
+        bind _bk1 = (Outcome <- 2).OnWritten;
+        DoneBackA <- BackA;
+    };
+    _backWrite = switch (_sourceA <- LastAppliedA)
+        | OnWritten |> _backDoneOk
+        | OnFail |> _backDoneFail;
+    _origDoneOk = impulse {
+        bind _og0 = (Outcome <- 1).OnWritten;
+        DoneOrigA <- OrigA;
+    };
+    _origDoneFail = impulse {
+        bind _og1 = (Outcome <- 2).OnWritten;
+        DoneOrigA <- OrigA;
+    };
+    _origWrite = switch (_sourceA <- OriginalA)
+        | OnWritten |> _origDoneOk
+        | OnFail |> _origDoneFail;
+    _alphaDoneOk = impulse {
+        bind _al0 = (Outcome <- 1).OnWritten;
+        DoneAlphaA <- AlphaA;
+    };
+    _alphaDoneFail = impulse {
+        bind _al1 = (Outcome <- 2).OnWritten;
+        DoneAlphaA <- AlphaA;
+    };
+    _alphaWrite = switch (_sourceA <- _alphaA)
+        | OnWritten |> _alphaDoneOk
+        | OnFail |> _alphaDoneFail;
+
+    // Native colorX copies (profile kept): the unhooked-drive seed (C29) and the LastApplied-drive source (C9).
+    _driveCopy = switch (DriveSeed <- LastAppliedA)
+        | OnWritten |> DoneDriveCopy <- DriveCopy;
+    _laCopy = switch (LaSrcA <- LastAppliedA)
+        | OnWritten |> DoneLaCopy <- LaCopy;
+
+    // C3: an input change on row A, then the CommitProbe OK trigger 0.05 s later (inside the 0.15 s window).
+    _inputOk2 = impulse {
+        bind _ok0 = DelaySecondsFloat(Duration=0.05).Next;
+        bind _ok1 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OkPress).OnWritten;
+        bind _ok2 = (T1 <- WorldTimeDouble).OnWritten;
+        DoneInputOk <- InputOk;
+    };
+    _inputOk = impulse {
+        bind _ok3 = (InputAR <- TextA).OnWritten;
+        bind _ok4 = (T0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_inputOk2);
+    };
+
+    // C8 / C8b: input changes on rows A and B, then the CommitProbe restore trigger 0.05 s later.
+    _inputsRestore2 = impulse {
+        bind _rs0 = DelaySecondsFloat(Duration=0.05).Next;
+        bind _rs1 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=RestorePress).OnWritten;
+        bind _rs2 = (T1 <- WorldTimeDouble).OnWritten;
+        DoneInputsRestore <- InputsRestore;
+    };
+    _inputsRestore = impulse {
+        bind _rs3 = (InputAR <- TextA).OnWritten;
+        bind _rs4 = (InputBR <- TextB).OnWritten;
+        bind _rs5 = (T0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_inputsRestore2);
+    };
+
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Claim, OnChanged=_claim);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Release, OnChanged=_release);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Seed, OnChanged=_seed);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=ExtA, OnChanged=_extAWrite);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=ExtB, OnChanged=_extBWrite);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=BackA, OnChanged=_backWrite);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=OrigA, OnChanged=_origWrite);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=AlphaA, OnChanged=_alphaWrite);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=DriveCopy, OnChanged=_driveCopy);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=LaCopy, OnChanged=_laCopy);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=InputOk, OnChanged=_inputOk);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=InputsRestore, OnChanged=_inputsRestore);
+}

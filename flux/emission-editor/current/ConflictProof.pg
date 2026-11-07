@@ -1,0 +1,80 @@
+module ConflictProof
+// Task5 S2 (design 4-2, brief case 2): after a StartAsyncTask delay the direct ValueSource read must reflect a
+// change made during the wait, and a full RGBA/profile guard against the private LastApplied must refuse the
+// would-write. Owned private ValueField<colorX> fields only. Single processing user: the host. No per-frame entrypoint.
+in Command: int
+in SourceField: FrooxEngine.IValue<colorX>
+in Before: colorX
+in LastApplied: colorX mutable
+in APre: colorX mutable
+in AExtOutcome: int mutable
+in APost: colorX mutable
+in AGuardOk: bool mutable
+in AWriterAttempts: int mutable
+in ARefusals: int mutable
+in AWriteOutcome: int mutable
+in AAfter: colorX mutable
+in AT0: double mutable
+in AT1: double mutable
+in ADone: int mutable
+where {
+    _source = FieldAsVariable<colorX>(Field=SourceField);
+    _direct = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
+    _srgb = IntToEnum<Renderite.Shared.ColorProfile>(1);
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    _candW = Pack_ColorX(R=3.0, G=0.5, B=6.0, A=0.25, Profile=_srgb);
+    _ext = Pack_ColorX(R=0.75, G=3.5, B=0.125, A=0.875, Profile=_linear);
+    _bp = Unpack_ColorX(V=Before);
+    _captured = not (_bp.R == -1.0 and _bp.G == -1.0 and _bp.B == -1.0 and _bp.A == -1.0);
+    // Full comparison of the fresh read with the private LastApplied (never colorX == alone).
+    _fp = Unpack_ColorX(V=_direct);
+    _lp = Unpack_ColorX(V=LastApplied);
+    _fresh = _fp.R == _lp.R and _fp.G == _lp.G and _fp.B == _lp.B and _fp.A == _lp.A and _fp.Profile == _lp.Profile;
+
+    _aDone = ADone <- Command;
+    _aAfter = impulse {
+        bind _aa0 = (AAfter <- _direct).OnWritten;
+        _aDone;
+    };
+    _aWritten = impulse {
+        bind _aw0 = (AWriteOutcome <- 1).OnWritten;
+        _aAfter;
+    };
+    _aWriteFailed = impulse {
+        bind _af0 = (AWriteOutcome <- 2).OnWritten;
+        _aAfter;
+    };
+    _aWrite = impulse {
+        bind _ai0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=AWriterAttempts).OnWritten;
+        switch (_source <- _candW)
+        | OnWritten |> _aWritten
+        | OnFail |> _aWriteFailed;
+    };
+    _aRefuse = impulse {
+        bind _ar0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=ARefusals).OnWritten;
+        bind _ar1 = (AWriteOutcome <- 0).OnWritten;
+        _aAfter;
+    };
+    // The guard is evaluated in the async context, after the delay, immediately before the would-write.
+    _aGuard = if _fresh then _aWrite else _aRefuse;
+    _aTask = impulse {
+        bind _ad0 = DelaySecondsFloat(Duration=0.15).Next;
+        bind _ad1 = (APost <- _direct).OnWritten;
+        bind _ad2 = (AT1 <- WorldTimeDouble).OnWritten;
+        bind _ad3 = (AGuardOk <- _fresh).OnWritten;
+        _aGuard;
+    };
+    // OnStarted runs after the async part reached the delay and before it completes: the external change (command 2).
+    _aExtWrite = switch (_source <- _ext)
+        | OnWritten |> AExtOutcome <- 1
+        | OnFail |> AExtOutcome <- 2;
+    _aExternal = if Command == 2 then _aExtWrite else AExtOutcome <- 0;
+    _aStart = impulse {
+        bind _as0 = (LastApplied <- Before).OnWritten;
+        bind _as1 = (APre <- _direct).OnWritten;
+        bind _as2 = (AT0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_aTask, OnStarted=_aExternal);
+    };
+    _dispatch = if _captured and (Command == 1 or Command == 2) then _aStart;
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Command, OnChanged=_dispatch);
+}

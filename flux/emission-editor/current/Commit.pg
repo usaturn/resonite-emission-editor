@@ -1,0 +1,395 @@
+module Commit
+// Task5 S4a, design-r7 §3.3 (incl. r2 I2/I6/M3/M4/M5/M12, r3 N1/N4/N7, r4 R3C-M1/R3C-M2, r5 D5/D6, r6 Q2,
+// r7 M-3/M-8/Info-2/Info-4) and controller ruling r7-note1 (a CLOSE FAIL is a partial commit). Session-wide OK /
+// 元に戻す / キャンセル, the STATUS after an accept, and the host recovery (OnStart, UserLeft).
+// Presses re-evaluate CanOk / CanRestore / CanCancel inside the press impulse and, only when true, write Stage <- 1 ->
+// Intent <- k in that same synchronous impulse before StartAsyncTask (one command loop per client, N7). A loop issues
+// a command (AckRemaining <- RowCount -> counters 0 -> CommandKind -> CommandUser <- LocalUser -> CommandSeq++), waits
+// for the row responses (0.05 s polls, at most _waitLimit) and, after every wait, checks loop ownership (_own:
+// CommandSeq and Intent still the ones it issued, plus Operator == LocalUser for the operator, CommandUser == LocalUser
+// for the host recovery). An overtaken loop writes nothing (no Stage/Intent/Status/flags/SelectedRoot/Operator).
+// Before the first issue, a failure resets Stage/Intent unconditionally (R3C-M2); in the host recovery it takes the
+// recovery failure exit instead (review M-2). This module never writes or reads a Source and never asks rows to write
+// one except through RESTORE (rows decide; see RowCommand). No per-frame entrypoint.
+in OkButton: FrooxEngine.UIX.Button element
+in RestoreButton: FrooxEngine.UIX.Button element
+in CancelButton: FrooxEngine.UIX.Button element
+in Operator: FrooxEngine.User mutable
+in OperatorGuard: string mutable
+in UiReady: bool
+in Ready: bool
+in Busy: bool
+in SelectedRoot: FrooxEngine.Slot mutable
+in RowCount: int
+in Intent: int mutable
+in CommandSeq: int mutable
+in CommandKind: int mutable
+in CommandUser: FrooxEngine.User mutable
+in AckRemaining: int mutable
+in AckWait: int mutable
+in AckRefuse: int mutable
+in AckFail: int mutable
+in PreviewActive: bool mutable
+in RecoveryPending: bool mutable
+in OperationStage: int mutable
+in Status: string mutable
+in RecoverTarget: FrooxEngine.User mutable
+in NullUser: FrooxEngine.User
+in NullRoot: FrooxEngine.Slot
+out CanOk: bool
+out CanRestore: bool
+out CanCancel: bool
+where {
+    // Intent: 0 idle, 1 OK, 2 元に戻す, 3 キャンセル, 4 host recovery, 5 accept (STATUS). CommandKind: 1 CHECK,
+    // 2 CLOSE, 3 RESTORE, 4 STATUS.
+    // M-3: the wait limit (0.05 s polls per issued command; 40 = at most 2 s) is this one line, used by every wait.
+    _waitLimit = 40;
+
+    _msgOkRefused = "確定できない行があります（各行の表示を確認）";
+    _msgCommitted = "確定しました";
+    _msgPartial = "一部の行を確定できませんでした。確定済みの行は『確定済み』、残りは未確定のままです（元に戻すで未確定の行だけ戻ります。確定済みの行は、OK で残りを確定するか、キャンセルで未確定の行を戻して編集を終えてから選択し直すと編集できます）";
+    _msgRestoreFailed = "復元できない行があります（各行の表示を確認）。戻せない行は、その行の『現在値を受け入れて閉じる』で記録を閉じることもできます（元の値には戻しません）";
+    // S4a-question: the design gives no Status for a successful restore/cancel/recovery; the RESTORED row text is used.
+    _msgRestored = "元の値に戻しました";
+    // S4a-question: the design gives no Status for a failed flag/SelectedRoot write at the end of OK/restore/cancel/
+    // recovery; the STATE_FAILED row text is used and no further flag is written.
+    _msgStateFailed = "記録を更新できません";
+    _msgStatusUnconfirmed = "行の状態を確認できませんでした（復元待ちのままです）";
+    _msgAccepted = "現在値を受け入れて行の記録を閉じました（元の値には戻していません）。この行は、編集を終えてから選択し直すと編集できます";
+    _msgAcceptedPreview = "現在値を受け入れて行の記録を閉じました（元の値には戻していません）。この行は、編集を終えてから選択し直すと編集できます。ほかの行のプレビューは残っています（OK で確定するか、元に戻す・キャンセル）";
+    _msgRemaining = "復元が未完了の行が残っています（各行の表示を確認）";
+
+    // I2: the press conditions; the outputs drive the buttons (appearance only), the presses re-evaluate them.
+    _base = Operator == LocalUser and UiReady and Ready and not Busy and Intent == 0 and OperationStage == 0
+        and RowCount >= 1;
+    _canOk = _base and not RecoveryPending and not IsNull<FrooxEngine.Slot>(Instance=SelectedRoot);
+    _canRestore = _base and (PreviewActive or RecoveryPending);
+    _canCancel = _base;
+    CanOk = _canOk;
+    CanRestore = _canRestore;
+    CanCancel = _canCancel;
+
+    // N1 (r3): _gone is connection based (null or IsRemoved); IsUserPresentInWorld is not used.
+    _gone = IsNull<FrooxEngine.User>(Instance=Operator) or IsRemoved(Element=as<FrooxEngine.IWorldElement>(Operator));
+    _records = PreviewActive or RecoveryPending or OperationStage != 0 or Intent != 0;
+
+    local _kind: int;
+    local _phase: int;
+    local _outcome: int;
+    local _owned: bool;
+    local _mySeq: int;
+    local _myIntent: int;
+    local _tries: int;
+    local _retries: int;
+    local _hadRecords: bool;
+    local _startIntent: int;
+
+    // N1: loop ownership (re-captured at every issue).
+    _own = CommandSeq == _mySeq and Intent == _myIntent
+        and (if _myIntent == 4 then CommandUser == LocalUser else Operator == LocalUser);
+
+    // R3C-M2: before the first issue the press itself owns Stage/Intent: reset them unconditionally.
+    _preIntent = Intent <- 0;
+    _resetPre = switch (OperationStage <- 0)
+        | OnWritten |> _preIntent
+        | OnFail |> _preIntent;
+    _statusUnconfirmedPre = switch (Status <- _msgStatusUnconfirmed)
+        | OnWritten |> _resetPre
+        | OnFail |> _resetPre;
+    _preFailed = if _kind == 4 then _statusUnconfirmedPre else _resetPre;
+
+    // M4: Stage <- 0, Intent <- 0 at the end of every owned path (only while _own holds; N1).
+    _endIntent = Intent <- 0;
+    _endStage = switch (OperationStage <- 0)
+        | OnWritten |> _endIntent
+        | OnFail |> _endIntent;
+    _finish = if _own then _endStage;
+    // Host recovery ends with Intent <- 0 then Stage <- 0 (§3.3 復旧の手順).
+    _endRecoverStage = OperationStage <- 0;
+    _endRecover = switch (Intent <- 0)
+        | OnWritten |> _endRecoverStage
+        | OnFail |> _endRecoverStage;
+
+    // ---- Host release (compare, then clear; writes only values that change).
+    // M-2: after the first issue the end needs _own; a recovery that failed before it (not _owned) ends regardless.
+    _rlEnd = if _hadRecords and (_own or not _owned) then _endRecover;
+    _rlTarget = if IsNull<FrooxEngine.User>(Instance=RecoverTarget) then _rlEnd
+        else switch (RecoverTarget <- NullUser)
+        | OnWritten |> _rlEnd
+        | OnFail |> _rlEnd;
+    _rlRoot = if IsNull<FrooxEngine.Slot>(Instance=SelectedRoot) then _rlTarget
+        else switch (SelectedRoot <- NullRoot)
+        | OnWritten |> _rlTarget
+        | OnFail |> _rlTarget;
+    _rlGuard = if OperatorGuard == "" then _rlRoot
+        else switch (OperatorGuard <- "")
+        | OnWritten |> _rlRoot
+        | OnFail |> _rlRoot;
+    _rlOperator = if IsNull<FrooxEngine.User>(Instance=Operator) then _rlGuard
+        else switch (Operator <- NullUser)
+        | OnWritten |> _rlGuard
+        | OnFail |> _rlGuard;
+    // S4a-question: a failed release write does not stop the following release writes (the design gives no rule).
+    _release = if ObjectEquals<FrooxEngine.User>(A=Operator, B=RecoverTarget) then _rlOperator else _rlTarget;
+
+    // ---- Conclusions (after the loop; owned outcomes only).
+    _stOkRefused = switch (Status <- _msgOkRefused)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stCommitted = switch (Status <- _msgCommitted)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stPartial = switch (Status <- _msgPartial)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stRestored = switch (Status <- _msgRestored)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stRestoreFailed = switch (Status <- _msgRestoreFailed)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stStateFailed = switch (Status <- _msgStateFailed)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stStatusUnconfirmed = switch (Status <- _msgStatusUnconfirmed)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stAccepted = switch (Status <- _msgAccepted)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stAcceptedPreview = switch (Status <- _msgAcceptedPreview)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+    _stRemaining = switch (Status <- _msgRemaining)
+        | OnWritten |> _finish
+        | OnFail |> _finish;
+
+    // OK, all rows closed: PreviewActive <- false, SelectedRoot <- null (editing ends).
+    _cmRoot = if IsNull<FrooxEngine.Slot>(Instance=SelectedRoot) then _stCommitted
+        else switch (SelectedRoot <- NullRoot)
+        | OnWritten |> _stCommitted
+        | OnFail |> _stStateFailed;
+    _cmDone = switch (PreviewActive <- false)
+        | OnWritten |> _cmRoot
+        | OnFail |> _stStateFailed;
+    // 元に戻す / キャンセル, all rows OK: PreviewActive <- false, RecoveryPending <- false; キャンセル: SelectedRoot <- null.
+    _rsEnd = if _myIntent == 3 and not IsNull<FrooxEngine.Slot>(Instance=SelectedRoot) then switch (SelectedRoot <- NullRoot)
+        | OnWritten |> _stRestored
+        | OnFail |> _stStateFailed
+        else _stRestored;
+    _rsLowered = switch (RecoveryPending <- false)
+        | OnWritten |> _rsEnd
+        | OnFail |> _stStateFailed;
+    _rsDone = switch (PreviewActive <- false)
+        | OnWritten |> _rsLowered
+        | OnFail |> _stStateFailed;
+    _rsNotDone = switch (RecoveryPending <- true)
+        | OnWritten |> _stRestoreFailed
+        | OnFail |> _stRestoreFailed;
+    // Host recovery: the same flags, then the release (success and failure both end the edit session).
+    _rvStRestored = switch (Status <- _msgRestored)
+        | OnWritten |> _release
+        | OnFail |> _release;
+    _rvStFailed = switch (Status <- _msgRestoreFailed)
+        | OnWritten |> _release
+        | OnFail |> _release;
+    // Recovery failure exit: RecoveryPending <- true -> Status -> compare-then-release -> Intent <- 0 -> Stage <- 0.
+    _rvNotDone = switch (RecoveryPending <- true)
+        | OnWritten |> _rvStFailed
+        | OnFail |> _rvStFailed;
+    // M-2: a failed flag write after a full success takes the failure exit (never releases with RecoveryPending false).
+    _rvLowered = switch (RecoveryPending <- false)
+        | OnWritten |> _rvStRestored
+        | OnFail |> _rvNotDone;
+    _rvDone = switch (PreviewActive <- false)
+        | OnWritten |> _rvLowered
+        | OnFail |> _rvNotDone;
+    // STATUS (D6, Q2, M-8): lower flags only when allowed; a failed flag write stops the following ones.
+    _saRecovery = switch (RecoveryPending <- false)
+        | OnWritten |> _stAccepted
+        | OnFail |> _stStatusUnconfirmed;
+    _saAll = switch (PreviewActive <- false)
+        | OnWritten |> _saRecovery
+        | OnFail |> _stStatusUnconfirmed;
+    _saPreview = switch (RecoveryPending <- false)
+        | OnWritten |> _stAcceptedPreview
+        | OnFail |> _stStatusUnconfirmed;
+
+    // Outcomes: 1 failed before the first issue, 10 OK aborted (records unchanged), 20 committed, 21 partial commit,
+    // 30 restored, 31 restore failed, 40 STATUS timed out, 41 STATUS lowers both, 42 STATUS lowers RecoveryPending
+    // only, 43 STATUS lowers nothing. 0: overtaken (nothing is written).
+    _c30 = if _myIntent == 4 then _rvDone else _rsDone;
+    _c31 = if _myIntent == 4 then _rvNotDone else _rsNotDone;
+    _concludeOwned = if _outcome == 10 then _stOkRefused
+        else if _outcome == 20 then _cmDone
+        else if _outcome == 21 then _stPartial
+        else if _outcome == 30 then _c30
+        else if _outcome == 31 then _c31
+        else if _outcome == 40 then _stStatusUnconfirmed
+        else if _outcome == 41 then _saAll
+        else if _outcome == 42 then _saPreview
+        else if _outcome == 43 then _stRemaining;
+    // M-2: outcome 1 in the host recovery (_hadRecords) takes the recovery failure exit, not the R3C-M2 reset.
+    _conclude = if _outcome == 1 and _hadRecords then _rvNotDone
+        else if _outcome == 1 then _preFailed
+        else if _own then _concludeOwned;
+
+    // ---- Evaluation after a wait (writes locals only).
+    // S4a-question: OK's CHECK timeout and the 10th WAIT end like a REFUSE (records unchanged, the REFUSE text).
+    _evTimeout = _outcome <- (if _kind == 1 then 10 else if _kind == 2 then 21 else if _kind == 3 then 31 else 40);
+    _evCheckNext = impulse {
+        bind _en0 = (_kind <- 2).OnWritten;
+        _phase <- 1;
+    };
+    _evCheckAgain = if _own then (_phase <- 1);
+    _evCheckRetry = impulse {
+        bind _er0 = (_retries <- _retries + 1).OnWritten;
+        bind _er1 = DelaySecondsFloat(Duration=0.1).Next;
+        _evCheckAgain;
+    };
+    _evCheckWait = if _retries < 10 then _evCheckRetry else (_outcome <- 10);
+    _evCheck = if AckRefuse > 0 or AckFail > 0 then (_outcome <- 10)
+        else if AckWait > 0 then _evCheckWait
+        else _evCheckNext;
+    _evClose = _outcome <- (if AckRefuse == 0 and AckFail == 0 and AckWait == 0 then 20 else 21);
+    _evRestore = _outcome <- (if AckRefuse == 0 and AckFail == 0 and AckWait == 0 then 30 else 31);
+    _evStatus = _outcome <- (if AckRefuse == 0 and AckFail == 0 and AckWait == 0 then 41
+        else if AckRefuse == 0 and AckFail == 0 and PreviewActive then 42
+        else 43);
+    _evaluate = if _own then (if AckRemaining > 0 then _evTimeout
+        else if _kind == 1 then _evCheck
+        else if _kind == 2 then _evClose
+        else if _kind == 3 then _evRestore
+        else _evStatus);
+
+    // ---- Issue and wait.
+    _poll = impulse {
+        bind _pl0 = DelaySecondsFloat(Duration=0.05).Next;
+        _tries <- _tries + 1;
+    };
+    _issued = impulse {
+        bind _is0 = (_mySeq <- CommandSeq).OnWritten;
+        bind _is1 = (_myIntent <- Intent).OnWritten;
+        bind _is2 = (_owned <- true).OnWritten;
+        bind _is3 = (_tries <- 0).OnWritten;
+        bind _is4 = AsyncWhile(Condition=AckRemaining > 0 and _tries < _waitLimit and _own, LoopIteration=_poll).LoopEnd;
+        _evaluate;
+    };
+    _issueFailed = if _owned then (_outcome <- 10) else (_outcome <- 1);
+    _isSeq = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=CommandSeq)
+        | OnWritten |> _issued
+        | OnFail |> _issueFailed;
+    _isUser = switch (CommandUser <- LocalUser)
+        | OnWritten |> _isSeq
+        | OnFail |> _issueFailed;
+    _isKind = switch (CommandKind <- _kind)
+        | OnWritten |> _isUser
+        | OnFail |> _issueFailed;
+    _isFail = switch (AckFail <- 0)
+        | OnWritten |> _isKind
+        | OnFail |> _issueFailed;
+    _isRefuse = switch (AckRefuse <- 0)
+        | OnWritten |> _isFail
+        | OnFail |> _issueFailed;
+    _isWait = switch (AckWait <- 0)
+        | OnWritten |> _isRefuse
+        | OnFail |> _issueFailed;
+    _issue = switch (AckRemaining <- RowCount)
+        | OnWritten |> _isWait
+        | OnFail |> _issueFailed;
+    // RowCount < 1: no command is issued.
+    _roundIssue = if RowCount >= 1 then _issue else _issueFailed;
+    _round = impulse {
+        bind _rd0 = (_phase <- 0).OnWritten;
+        _roundIssue;
+    };
+    _run = impulse {
+        bind _rn0 = (_owned <- false).OnWritten;
+        bind _rn1 = (_retries <- 0).OnWritten;
+        bind _rn2 = (_outcome <- 0).OnWritten;
+        bind _rn3 = (_phase <- 1).OnWritten;
+        bind _rn4 = AsyncWhile(Condition=_phase == 1, LoopIteration=_round).LoopEnd;
+        _conclude;
+    };
+    _startRun = StartAsyncTask(TaskStart=_run, OnFailed=_preFailed);
+    _okRun = impulse {
+        bind _kr0 = (_kind <- 1).OnWritten;
+        _startRun;
+    };
+    _restoreRun = impulse {
+        bind _kr1 = (_kind <- 3).OnWritten;
+        _startRun;
+    };
+    _statusRun = impulse {
+        bind _kr2 = (_kind <- 4).OnWritten;
+        _startRun;
+    };
+
+    // ---- Presses (I2): condition re-evaluated; Stage <- 1 (OnFail: nothing) -> Intent <- k -> the loop.
+    _okIntent = switch (Intent <- 1)
+        | OnWritten |> _okRun
+        | OnFail |> _resetPre;
+    _okPress = if _canOk then switch (OperationStage <- 1)
+        | OnWritten |> _okIntent;
+    _restoreIntent = switch (Intent <- 2)
+        | OnWritten |> _restoreRun
+        | OnFail |> _resetPre;
+    _restorePress = if _canRestore then switch (OperationStage <- 1)
+        | OnWritten |> _restoreIntent;
+    _cancelIntent = switch (Intent <- 3)
+        | OnWritten |> _restoreRun
+        | OnFail |> _resetPre;
+    _cancelPress = if _canCancel then switch (OperationStage <- 1)
+        | OnWritten |> _cancelIntent;
+
+    // ---- STATUS after an accept (D6): only Intent 5 with Stage 1 on the operator's client.
+    _statusBegin = if UiReady and Ready and not Busy and RowCount >= 1 then _statusRun else _statusUnconfirmedPre;
+    _statusEntry = if Operator == LocalUser and Intent == 5 and OperationStage == 1 then _statusBegin;
+
+    // ---- Host recovery (I6, N1, N4, R3C-M1): RecoverTarget <- Operator (OnFail: the failure exit) -> with records:
+    // Intent <- 4 -> Stage <- 1 -> RESTORE loop -> flags -> release; without records: release only.
+    // M-2: Intent <- 4 / Stage <- 1 OnFail and StartAsyncTask OnFailed take the recovery failure exit (_rvNotDone).
+    _recoverRun = impulse {
+        bind _kr3 = (_kind <- 3).OnWritten;
+        StartAsyncTask(TaskStart=_run, OnFailed=_rvNotDone);
+    };
+    _recoverStage = switch (OperationStage <- 1)
+        | OnWritten |> _recoverRun
+        | OnFail |> _rvNotDone;
+    _recoverIntent = switch (Intent <- 4)
+        | OnWritten |> _recoverStage
+        | OnFail |> _rvNotDone;
+    _recoverBranch = if _hadRecords then _recoverIntent else _release;
+    _recoverNoted = impulse {
+        bind _rv0 = (_hadRecords <- _records).OnWritten;
+        _recoverBranch;
+    };
+    // Ruling (2) 09:16:00Z: a failed RecoverTarget write also takes the failure exit (the release compares against the
+    // stored RecoverTarget, so it cannot release another user); _hadRecords is noted first so the exit ends Intent/Stage.
+    _recoverTargetFailed = impulse {
+        bind _rv1 = (_hadRecords <- _records).OnWritten;
+        _rvNotDone;
+    };
+    _recoverStart = if ObjectEquals<FrooxEngine.User>(A=RecoverTarget, B=Operator) then _recoverNoted
+        else switch (RecoverTarget <- Operator)
+        | OnWritten |> _recoverNoted
+        | OnFail |> _recoverTargetFailed;
+    // OnStart: the Intent seen right after start is carried over a 1 s wait (DelayedValue, no local before the wait).
+    _startDecide = if _gone and (Intent != 4 or (_startIntent == 4 and Intent == 4)) then _recoverStart;
+    _startWait = impulse {
+        bind _sw0 = DelayWithValueSecondsFloat<int>(Value=Intent, Duration=1.0).Next;
+        bind _sw1 = (_startIntent <- _sw0.DelayedValue).OnWritten;
+        _startDecide;
+    };
+
+    OnStart(OnlyHost=true, Trigger=StartAsyncTask(TaskStart=_startWait));
+    switch UserLeft(OnlyHost=true)
+    | OnLeft _left |> (if (_left.LeftUser == Operator or _gone) and Intent != 4 then _recoverStart);
+    FireOnValueChange<int>(OnlyForUser=Operator, Value=Intent, OnChanged=_statusEntry);
+    _okButton = as<FrooxEngine.IButton>(OkButton);
+    ButtonEvents(Button=asDrivenGlobal(_okButton), Pressed=_okPress);
+    _restoreButton = as<FrooxEngine.IButton>(RestoreButton);
+    ButtonEvents(Button=asDrivenGlobal(_restoreButton), Pressed=_restorePress);
+    _cancelButton = as<FrooxEngine.IButton>(CancelButton);
+    ButtonEvents(Button=asDrivenGlobal(_cancelButton), Pressed=_cancelPress);
+}

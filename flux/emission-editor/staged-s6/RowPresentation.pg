@@ -1,0 +1,70 @@
+module RowPresentation
+// Presentation observes registered fields; reload edits only owned input text, never saved originals/materials.
+// Task5 S6a (design-r7 §3.4 RowPresentation, §3.5; r5 D6, r6 S3-M-6/Q4, r7 M-5/r6-Q1/Info-1).
+// RowStatus is built from Result, RowPending and OpStage (§3.4); External/ExternalConfirmed add only the Task4 guidance
+// for Result 0. LastApplied, Valid and Dirty stay declared (bindings unchanged, r2 I4) but are unused.
+// Resolved S6a Q3-Q6: controller rulings, ledger 2026-11-05T13:35:00Z.
+in ReloadButton: FrooxEngine.UIX.Button element
+in Operator: FrooxEngine.User
+in Original: colorX
+in LastApplied: colorX
+in Current: colorX
+in Valid: bool
+in Dirty: bool
+in PreviewWritten: bool
+in RecoveryPending: bool
+in OperationStage: int
+in External: bool
+in ExternalConfirmed: bool
+in CanEdit: bool
+in Intent: int
+in OpStage: int
+in RowPending: bool
+in Result: int
+in CanAccept: bool
+in InputR: string mutable
+in InputG: string mutable
+in InputB: string mutable
+out OriginalDisplay: string
+out CurrentDisplay: string
+out RowStatus: string
+where {
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+    OriginalDisplay = ToString_ColorX(V=Original, Format="R", FormatProvider=_culture);
+    CurrentDisplay = ToString_ColorX(V=Current, Format="R", FormatProvider=_culture);
+    // §3.5 result codes. A code outside the table shows the Task4 check text, never a success text (Q4).
+    _reason = if Result == 0 then "未編集"
+        else if Result == 1 then "ライブ反映中"
+        else if Result == 2 then "元の値に戻しました"
+        else if Result == 3 then "確定済み"
+        else if Result == 4 then "現在値を受け入れました（元の値には戻していません）"
+        else if Result == 10 then "RGB 入力を確認してください"
+        else if Result == 11 then "操作できない状態です（外部共有の確認など）"
+        else if Result == 12 then "外部の変更を検出しました（反映を停止）"
+        else if Result == 13 then "登録した利用先が変わりました（再登録が必要）"
+        else if Result == 20 then "書き込みを確認できません"
+        else if Result == 21 then "記録を更新できません"
+        else "復元・処理状態を確認してください";
+    // S3-M-6: the 「復元が未完了: 」 prefix is decided by RowPending only; Result gives only the reason.
+    // r7 M-5 / r6-Q1: CanAccept (p-can-accept.Value, a per-client drive) adds the consequence on RowPending rows.
+    _pendingText = ConcatenateString(A="復元が未完了: ", B=_reason);
+    _pendingStatus = if CanAccept then ConcatenateString(A=_pendingText, B="（受け入れると元の値には戻しません）")
+        else _pendingText;
+    // OpStage != 0 without RowPending (an unresolved Source operation) shows the Task4 check text (Q5).
+    // Q3: an unconfirmed externally shared row with Result 0 shows the Task4 guidance (no mirror-based pre-detection).
+    RowStatus = if RowPending then _pendingStatus
+        else if OpStage != 0 then "復元・処理状態を確認してください"
+        else if Result == 0 and External and not ExternalConfirmed then "外部共有あり・確認が必要"
+        else _reason;
+    _parts = Unpack_ColorX(V=Current);
+    // Reload writes only InputR/G/B, never Original; §3.4 adds Intent == 0 and the row's OpStage == 0.
+    // The Task4 terms (CanEdit, operator, !PreviewWritten, !RecoveryPending, Stage 0) are kept (Q6).
+    _reload = if CanEdit and Operator == LocalUser and not PreviewWritten and not RecoveryPending and OperationStage == 0
+        and Intent == 0 and OpStage == 0 then impulse {
+        bind _r = (InputR <- ToString_Float(V=_parts.R, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _g = (InputG <- ToString_Float(V=_parts.G, Format="R", FormatProvider=_culture)).OnWritten;
+        InputB <- ToString_Float(V=_parts.B, Format="R", FormatProvider=_culture);
+    };
+    _button = as<FrooxEngine.IButton>(ReloadButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_reload);
+}

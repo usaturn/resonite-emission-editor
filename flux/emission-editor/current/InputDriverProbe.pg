@@ -1,0 +1,183 @@
+module InputDriverProbe
+// Task5 S3 fixture-only producer (design-r4 §5 S3, r2 M10). Never deployed outside the owned PreviewProof root.
+// Each action has its own private trigger int (written once by the CLI); the action then performs, natively and with
+// fixed native delays, what the CLI cannot do within 150 ms or with a colour profile: operator claim/release, the
+// Linear seeds, two input changes 0.05 s apart, an input change followed by Intent=2, an external Source change 1 s
+// after an input change, the same with a Profile-only change (RGB and alpha of LastApplied kept, sRGB instead of the
+// row's Linear; r2, review I-2), and native colorX copies. Every write targets an owned private field; the two FieldAsVariable
+// targets are the fixture rows' private Sources (the external actor of the proof). Driven: an unhooked ProtoFlux drive
+// of a private field (P9). Single processing user: the host. No per-frame entrypoint.
+in Claim: int
+in Release: int
+in Seed: int
+in Burst: int
+in IntentStep: int
+in External: int
+in DriveCopy: int
+in WbCopy: int
+in ExternalBack: int
+in ProfileStep: int
+in Operator: FrooxEngine.User mutable
+in NullUser: FrooxEngine.User
+in SourceFField: FrooxEngine.IValue<colorX>
+in SourceSField: FrooxEngine.IValue<colorX>
+in InputFR: string mutable
+in InputSR: string mutable
+in Intent: int mutable
+in LastAppliedF: colorX
+in LastAppliedS: colorX
+in DriveSeed: colorX mutable
+in WbSrc: colorX mutable
+in DoneClaim: int mutable
+in DoneRelease: int mutable
+in DoneSeed: int mutable
+in DoneBurst: int mutable
+in DoneIntent: int mutable
+in DoneExternal: int mutable
+in DoneDriveCopy: int mutable
+in DoneWbCopy: int mutable
+in DoneExternalBack: int mutable
+in DoneProfile: int mutable
+in T0: double mutable
+in T1: double mutable
+in Outcome: int mutable
+out Driven: colorX
+where {
+    _sourceF = FieldAsVariable<colorX>(Field=SourceFField);
+    _sourceS = FieldAsVariable<colorX>(Field=SourceSField);
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    _srgb = IntToEnum<Renderite.Shared.ColorProfile>(1);
+    // HDR, alpha != 1, native Linear (the CLI colorX path would drop the profile).
+    _seedF = Pack_ColorX(R=1.5, G=0.25, B=3.0, A=0.625, Profile=_linear);
+    _seedS = Pack_ColorX(R=2.5, G=0.75, B=0.125, A=0.375, Profile=_linear);
+    _ext = Pack_ColorX(R=0.875, G=5.5, B=0.0625, A=0.8125, Profile=_srgb);
+    Driven = DriveSeed;
+
+    _claim = switch (Operator <- LocalUser)
+        | OnWritten |> DoneClaim <- Claim;
+    _release = switch (Operator <- NullUser)
+        | OnWritten |> DoneRelease <- Release;
+
+    _seedDoneOk = impulse {
+        bind _sd0 = (Outcome <- 1).OnWritten;
+        DoneSeed <- Seed;
+    };
+    _seedDoneFail = impulse {
+        bind _sd1 = (Outcome <- 2).OnWritten;
+        DoneSeed <- Seed;
+    };
+    _seedS1 = switch (_sourceS <- _seedS)
+        | OnWritten |> _seedDoneOk
+        | OnFail |> _seedDoneFail;
+    _seed = switch (_sourceF <- _seedF)
+        | OnWritten |> _seedS1
+        | OnFail |> _seedDoneFail;
+
+    // P2: two input changes 0.05 s apart (inside one 0.15 s window); only the second may be written, once.
+    _burst2 = impulse {
+        bind _b0 = DelaySecondsFloat(Duration=0.05).Next;
+        bind _b1 = (InputFR <- "4.25").OnWritten;
+        bind _b2 = (T1 <- WorldTimeDouble).OnWritten;
+        DoneBurst <- Burst;
+    };
+    _burst = impulse {
+        bind _b3 = (InputFR <- "3.5").OnWritten;
+        bind _b4 = (T0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_burst2);
+    };
+
+    // P4: an input change, then Intent=2 (restore issued) 0.05 s later, while the request is still waiting.
+    _intent2 = impulse {
+        bind _i0 = DelaySecondsFloat(Duration=0.05).Next;
+        bind _i1 = (Intent <- 2).OnWritten;
+        bind _i2 = (T1 <- WorldTimeDouble).OnWritten;
+        DoneIntent <- IntentStep;
+    };
+    _intent = impulse {
+        bind _i3 = (InputFR <- "5.5").OnWritten;
+        bind _i4 = (T0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_intent2);
+    };
+
+    // P5: an input change on the slow row, then an external Source change 1 s later (inside its long delay).
+    _extDone = impulse {
+        bind _x0 = (T1 <- WorldTimeDouble).OnWritten;
+        DoneExternal <- External;
+    };
+    _extWritten = impulse {
+        bind _x1 = (Outcome <- 1).OnWritten;
+        _extDone;
+    };
+    _extFailed = impulse {
+        bind _x2 = (Outcome <- 2).OnWritten;
+        _extDone;
+    };
+    _external2 = impulse {
+        bind _x3 = DelaySecondsFloat(Duration=1.0).Next;
+        switch (_sourceS <- _ext)
+        | OnWritten |> _extWritten
+        | OnFail |> _extFailed;
+    };
+    _external = impulse {
+        bind _x4 = (InputSR <- "6.5").OnWritten;
+        bind _x5 = (T0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_external2);
+    };
+
+    // (r2, I-2) P5b: an input change on the slow row, then 1 s later a Source value that differs from LastAppliedS only
+    // in its Profile (R, G, B, A unchanged). An RGB-only (or RGBA-only) comparison would not see it.
+    _lpS = Unpack_ColorX(V=LastAppliedS);
+    _profileOnly = Pack_ColorX(R=_lpS.R, G=_lpS.G, B=_lpS.B, A=_lpS.A, Profile=_srgb);
+    _profDone = impulse {
+        bind _pd0 = (T1 <- WorldTimeDouble).OnWritten;
+        DoneProfile <- ProfileStep;
+    };
+    _profWritten = impulse {
+        bind _pd1 = (Outcome <- 1).OnWritten;
+        _profDone;
+    };
+    _profFailed = impulse {
+        bind _pd2 = (Outcome <- 2).OnWritten;
+        _profDone;
+    };
+    _profile2 = impulse {
+        bind _pd3 = DelaySecondsFloat(Duration=1.0).Next;
+        switch (_sourceS <- _profileOnly)
+        | OnWritten |> _profWritten
+        | OnFail |> _profFailed;
+    };
+    _profile = impulse {
+        bind _pd4 = (InputSR <- "7.5").OnWritten;
+        bind _pd5 = (T0 <- WorldTimeDouble).OnWritten;
+        StartAsyncTask(TaskStart=_profile2);
+    };
+
+    // Native colorX copies (profile kept): the unhooked-drive seed (P9), the WriteBack copy source (P9c), and the
+    // external actor putting the slow row's Source back to its LastApplied after P5.
+    _driveCopy = switch (DriveSeed <- LastAppliedF)
+        | OnWritten |> DoneDriveCopy <- DriveCopy;
+    _wbCopy = switch (WbSrc <- LastAppliedF)
+        | OnWritten |> DoneWbCopy <- WbCopy;
+    _backOk = impulse {
+        bind _k0 = (Outcome <- 1).OnWritten;
+        DoneExternalBack <- ExternalBack;
+    };
+    _backFail = impulse {
+        bind _k1 = (Outcome <- 2).OnWritten;
+        DoneExternalBack <- ExternalBack;
+    };
+    _externalBack = switch (_sourceS <- LastAppliedS)
+        | OnWritten |> _backOk
+        | OnFail |> _backFail;
+
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Claim, OnChanged=_claim);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Release, OnChanged=_release);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Seed, OnChanged=_seed);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Burst, OnChanged=_burst);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=IntentStep, OnChanged=_intent);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=External, OnChanged=_external);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=DriveCopy, OnChanged=_driveCopy);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=WbCopy, OnChanged=_wbCopy);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=ExternalBack, OnChanged=_externalBack);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=ProfileStep, OnChanged=_profile);
+}

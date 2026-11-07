@@ -1,0 +1,200 @@
+module RequestProof
+// Task5 S2 (design 4-3, 4-4, brief case 3): impulse-local values and DelayedValue across StartAsyncTask, and delayed
+// requests that must never write after a newer request, an epoch change or an invalid input. Each request is its own
+// FireOnValueChange context; the producer issues the next step only on the previous request's ack (no sleep as a
+// correctness mechanism). Owned private fields only. Single processing user: the host. No per-frame entrypoint.
+in Command: int
+in SourceField: FrooxEngine.IValue<colorX>
+in Generation: int
+in ReqTrigger: int mutable
+in ReqCand: colorX mutable
+in ReqValid: bool mutable
+in ReqSeq: int mutable
+in ReqAck: int mutable
+in Epoch: int mutable
+in ProdStep: int mutable
+in ProdDone: int mutable
+in ProdT1: double mutable
+in ProdT2: double mutable
+in ProdTInv: double mutable
+in LLocalSeq: int mutable
+in LLocalCand: colorX mutable
+in LUserOk: bool mutable
+in LDelayed: int mutable
+in LSeqNow: int mutable
+in LDone: int mutable
+in QStarted: int mutable
+in QFinished: int mutable
+in QStale: int mutable
+in QBlocked: int mutable
+in QInvalid: int mutable
+in QWrites: int mutable
+in QWriteFail: int mutable
+in QLastStaleSeq: int mutable
+in QLastStaleSawSeq: int mutable
+in QLastWriteSeq: int mutable
+in QLastWriteCand: colorX mutable
+in QLastPostT: double mutable
+in QFirstSeq: int mutable
+in QFirstSawSeq: int mutable
+in QFirstPostT: double mutable
+in QSecondSeq: int mutable
+in QSecondSawEpoch: int mutable
+where {
+    _source = FieldAsVariable<colorX>(Field=SourceField);
+    _direct = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
+    _srgb = IntToEnum<Renderite.Shared.ColorProfile>(1);
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    _candL = Pack_ColorX(R=2.0, G=1.0, B=0.5, A=0.625, Profile=_linear);
+    _poison = Pack_ColorX(R=-3.0, G=-3.0, B=-3.0, A=-3.0, Profile=_srgb);
+    _reqX = Pack_ColorX(R=4.0, G=0.25, B=0.5, A=0.5, Profile=_srgb);
+    _reqY = Pack_ColorX(R=0.5, G=8.0, B=0.25, A=0.75, Profile=_linear);
+    _reqZ = Pack_ColorX(R=9.0, G=9.0, B=9.0, A=0.25, Profile=_srgb);
+
+    // (4-3) Locals captured before StartAsyncTask, overwritten (poison) in OnStarted, read after the delay.
+    local _lseq: int;
+    local _lcand: colorX;
+    local _luser: FrooxEngine.User;
+    _lDone = LDone <- Command;
+    _lTask = impulse {
+        bind _ld = DelayWithValueSecondsFloat<int>(Value=ReqSeq, Duration=0.15).Next;
+        bind _ld1 = (LLocalSeq <- _lseq).OnWritten;
+        bind _ld2 = (LLocalCand <- _lcand).OnWritten;
+        bind _ld3 = (LUserOk <- not IsNull<FrooxEngine.User>(Instance=_luser) and _luser == LocalUser
+            and LocalUser == HostUser).OnWritten;
+        bind _ld4 = (LDelayed <- _ld.DelayedValue).OnWritten;
+        bind _ld5 = (LSeqNow <- ReqSeq).OnWritten;
+        _lDone;
+    };
+    _lPoison = impulse {
+        bind _lp1 = (_lseq <- -7).OnWritten;
+        bind _lp2 = (_lcand <- _poison).OnWritten;
+        ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=ReqSeq);
+    };
+    _local = impulse {
+        bind _lc1 = (_lseq <- ReqSeq).OnWritten;
+        bind _lc2 = (_lcand <- _candL).OnWritten;
+        bind _lc3 = (_luser <- LocalUser).OnWritten;
+        StartAsyncTask(TaskStart=_lTask, OnStarted=_lPoison);
+    };
+
+    // (4-4) Request handler: one FireOnValueChange context per request.
+    local _seq: int;
+    local _epoch: int;
+    local _gen: int;
+    local _user: FrooxEngine.User;
+    local _rcand: colorX;
+    local _valid: bool;
+    local _dv: int;
+    local _step: int;
+    _qFinish = impulse {
+        bind _qf0 = (QLastPostT <- WorldTimeDouble).OnWritten;
+        ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QFinished);
+    };
+    _qStale = impulse {
+        bind _qs0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QStale).OnWritten;
+        bind _qs1 = (QLastStaleSeq <- _seq).OnWritten;
+        bind _qs2 = (QLastStaleSawSeq <- ReqSeq).OnWritten;
+        _qFinish;
+    };
+    _qBlocked = impulse {
+        bind _qb0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QBlocked).OnWritten;
+        _qFinish;
+    };
+    _qInvalid = impulse {
+        bind _qi0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QInvalid).OnWritten;
+        _qFinish;
+    };
+    _qWritten = impulse {
+        bind _qw0 = (QLastWriteSeq <- _seq).OnWritten;
+        bind _qw1 = (QLastWriteCand <- _direct).OnWritten;
+        _qFinish;
+    };
+    _qWriteFailed = impulse {
+        bind _qx0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QWriteFail).OnWritten;
+        _qFinish;
+    };
+    _qWrite = impulse {
+        bind _qa0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QWrites).OnWritten;
+        switch (_source <- _rcand)
+        | OnWritten |> _qWritten
+        | OnFail |> _qWriteFailed;
+    };
+    // Rechecked after the delay: newer request, epoch/generation change, processing user, then the captured validity.
+    _stale = _dv != ReqSeq or _seq != ReqSeq;
+    _blocked = _epoch != Epoch or _gen != Generation or IsNull<FrooxEngine.User>(Instance=_user)
+        or _user != LocalUser or LocalUser != HostUser;
+    _qDecide = if _stale then _qStale
+        else if _blocked then _qBlocked
+        else if not _valid then _qInvalid
+        else _qWrite;
+    // Independent of the decision under test: what request 1 / request 2 saw at the post-delay check (the producer
+    // step captured at the request), recorded before the branch. Request 1: ReqSeq; request 2: Epoch.
+    _qRecordFirst = impulse {
+        bind _qo1 = (QFirstSeq <- _seq).OnWritten;
+        bind _qo2 = (QFirstSawSeq <- ReqSeq).OnWritten;
+        bind _qo3 = (QFirstPostT <- WorldTimeDouble).OnWritten;
+        _qDecide;
+    };
+    _qRecordSecond = impulse {
+        bind _qo4 = (QSecondSeq <- _seq).OnWritten;
+        bind _qo5 = (QSecondSawEpoch <- Epoch).OnWritten;
+        _qDecide;
+    };
+    _qObserve = if _step == 1 then _qRecordFirst
+        else if _step == 2 then _qRecordSecond
+        else _qDecide;
+    _reqTask = impulse {
+        bind _rd = DelayWithValueSecondsFloat<int>(Value=ReqSeq, Duration=0.15).Next;
+        bind _rd1 = (_dv <- _rd.DelayedValue).OnWritten;
+        _qObserve;
+    };
+    _reqAck = ReqAck <- _seq;
+    _request = impulse {
+        bind _rq0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=QStarted).OnWritten;
+        bind _rq1 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=ReqSeq).OnWritten;
+        bind _rq2 = (_seq <- ReqSeq).OnWritten;
+        bind _rq3 = (_epoch <- Epoch).OnWritten;
+        bind _rq4 = (_gen <- Generation).OnWritten;
+        bind _rq5 = (_user <- LocalUser).OnWritten;
+        bind _rq6 = (_rcand <- ReqCand).OnWritten;
+        bind _rq7 = (_valid <- ReqValid).OnWritten;
+        bind _rq8 = (_step <- ProdStep).OnWritten;
+        StartAsyncTask(TaskStart=_reqTask, OnStarted=_reqAck);
+    };
+
+    // Producer: request 1 on the command, request 2 on request 1's ack, then (command 3 only) the epoch change on
+    // request 2's ack. Command 2: X then Y (latest valid). Command 3: X, Y, epoch+1. Command 4: X then invalid Z.
+    _prodFinish = impulse {
+        bind _pf0 = (ProdStep <- 0).OnWritten;
+        ProdDone <- Command;
+    };
+    _prodInvalidate = impulse {
+        bind _pi0 = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=Epoch).OnWritten;
+        bind _pi1 = (ProdTInv <- WorldTimeDouble).OnWritten;
+        _prodFinish;
+    };
+    _prod3 = if Command == 3 then _prodInvalidate else _prodFinish;
+    _prodCand2 = if Command == 4 then _reqZ else _reqY;
+    _prod2 = impulse {
+        bind _p20 = (ProdStep <- 2).OnWritten;
+        bind _p21 = (ReqCand <- _prodCand2).OnWritten;
+        bind _p22 = (ReqValid <- Command != 4).OnWritten;
+        bind _p23 = (ProdT2 <- WorldTimeDouble).OnWritten;
+        ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=ReqTrigger);
+    };
+    _prodNext = if ProdStep == 1 then _prod2
+        else if ProdStep == 2 then _prod3;
+    _prod1 = impulse {
+        bind _p10 = (ProdStep <- 1).OnWritten;
+        bind _p11 = (ReqCand <- _reqX).OnWritten;
+        bind _p12 = (ReqValid <- true).OnWritten;
+        bind _p13 = (ProdT1 <- WorldTimeDouble).OnWritten;
+        ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=ReqTrigger);
+    };
+    _dispatch = if Command == 1 then _local
+        else if (Command == 2 or Command == 3 or Command == 4) and ProdStep == 0 then _prod1;
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Command, OnChanged=_dispatch);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=ReqTrigger, OnChanged=_request);
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=ReqAck, OnChanged=_prodNext);
+}

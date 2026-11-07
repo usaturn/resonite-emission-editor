@@ -1,0 +1,35 @@
+module Selection
+in ActiveGeneration: bool
+in SelectButton: FrooxEngine.UIX.Button element
+in RegisteredRoot: FrooxEngine.Slot
+in PendingRoot: FrooxEngine.Slot mutable
+in SelectedRoot: FrooxEngine.Slot mutable
+in Operator: FrooxEngine.User
+in Ready: bool
+in UiReady: bool
+in Busy: bool
+in RecoveryPending: bool
+in PreviewActive: bool
+in OperationStage: int
+in EditEpoch: int mutable
+in Status: string mutable
+out Selected: bool
+where {
+    Selected = SelectedRoot == RegisteredRoot and not IsNull<FrooxEngine.Slot>(Instance=RegisteredRoot);
+    _allowed = ActiveGeneration and UiReady and Ready and not Busy and Operator == LocalUser and not IsNull<FrooxEngine.Slot>(Instance=RegisteredRoot);
+    _idle = not RecoveryPending and not PreviewActive and OperationStage == 0;
+    _select = if _allowed then
+        if not _idle then Status <- "使用中 · 未確定のプレビューがあります。OK または復元後に切替してください"
+        else if not Selected then impulse {
+            bind _selected = (SelectedRoot <- RegisteredRoot).OnWritten;
+            bind _epoch = (EditEpoch <- EditEpoch + 1).OnWritten;
+            Status <- "使用中 · 編集対象を選択しました";
+        };
+    _request = if _allowed then
+        if PendingRoot == RegisteredRoot then _select
+        else PendingRoot <- RegisteredRoot;
+    _button = as<FrooxEngine.IButton>(SelectButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_request);
+    FireOnRefChange<FrooxEngine.Slot>(OnlyForUser=Operator, Value=PendingRoot,
+        OnChanged=if PendingRoot == RegisteredRoot then _select);
+}

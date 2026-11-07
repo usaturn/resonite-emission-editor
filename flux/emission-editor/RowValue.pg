@@ -1,0 +1,34 @@
+module RowValue
+
+// This proof receives a previously registered field; it never searches Components.
+in Current: colorX
+in Baseline: colorX
+in InputR: string
+in InputG: string
+in InputB: string
+out Valid: bool
+out Dirty: bool
+out Draft: colorX
+out ProfilePreserved: bool
+
+where {
+    _base = Unpack_ColorX(V=Baseline);
+    // NumberStyles.Float=167: whitespace/sign/decimal/exponent, no thousands.
+    _style = IntToEnum<System.Globalization.NumberStyles>(167);
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+    _r = Parse_Float(Str=InputR, NumberStyle=_style, FormatProvider=_culture);
+    _g = Parse_Float(Str=InputG, NumberStyle=_style, FormatProvider=_culture);
+    _b = Parse_Float(Str=InputB, NumberStyle=_style, FormatProvider=_culture);
+    Valid = _r.IsParsed and _g.IsParsed and _b.IsParsed
+        and not IsNaN_Float(_r.Value) and not IsInfinity_Float(_r.Value)
+        and not IsNaN_Float(_g.Value) and not IsInfinity_Float(_g.Value)
+        and not IsNaN_Float(_b.Value) and not IsInfinity_Float(_b.Value)
+        and _r.Value >= 0.0 and _g.Value >= 0.0 and _b.Value >= 0.0;
+    Dirty = Valid and (_r.Value != _base.R or _g.Value != _base.G or _b.Value != _base.B);
+    // An unchanged/invalid row retains the exact baseline value.
+    Draft = if Dirty then Pack_ColorX(R=_r.Value, G=_g.Value, B=_b.Value,
+        A=_base.A, Profile=_base.Profile) else Baseline;
+    _draftParts = Unpack_ColorX(V=Draft);
+    _currentParts = Unpack_ColorX(V=Current);
+    ProfilePreserved = _draftParts.Profile == _base.Profile and _currentParts.Profile == _base.Profile;
+}

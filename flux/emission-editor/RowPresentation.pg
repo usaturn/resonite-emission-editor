@@ -1,0 +1,40 @@
+module RowPresentation
+// Presentation observes registered fields; reload edits only owned input text, never saved originals/materials.
+in ReloadButton: FrooxEngine.UIX.Button element
+in Operator: FrooxEngine.User
+in Original: colorX
+in LastApplied: colorX
+in Current: colorX
+in Valid: bool
+in Dirty: bool
+in PreviewWritten: bool
+in RecoveryPending: bool
+in OperationStage: int
+in External: bool
+in ExternalConfirmed: bool
+in CanEdit: bool
+in InputR: string mutable
+in InputG: string mutable
+in InputB: string mutable
+out OriginalDisplay: string
+out CurrentDisplay: string
+out RowStatus: string
+where {
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+    OriginalDisplay = ToString_ColorX(V=Original, Format="R", FormatProvider=_culture);
+    CurrentDisplay = ToString_ColorX(V=Current, Format="R", FormatProvider=_culture);
+    RowStatus = if RecoveryPending or OperationStage != 0 then "復元・処理状態を確認してください"
+        else if Current != LastApplied then "外部の変更を検出しました"
+        else if PreviewWritten then "ライブ反映中"
+        else if External and not ExternalConfirmed then "外部共有あり・確認が必要"
+        else if not Valid then "RGB 入力を確認してください"
+        else if Dirty then "変更あり・未反映" else "未編集";
+    _parts = Unpack_ColorX(V=Current);
+    _reload = if CanEdit and Operator == LocalUser and not PreviewWritten and not RecoveryPending and OperationStage == 0 then impulse {
+        bind _r = (InputR <- ToString_Float(V=_parts.R, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _g = (InputG <- ToString_Float(V=_parts.G, Format="R", FormatProvider=_culture)).OnWritten;
+        InputB <- ToString_Float(V=_parts.B, Format="R", FormatProvider=_culture);
+    };
+    _button = as<FrooxEngine.IButton>(ReloadButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_reload);
+}

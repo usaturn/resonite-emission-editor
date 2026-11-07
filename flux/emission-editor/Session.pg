@@ -1,0 +1,23 @@
+module Session
+in AcquireButton: FrooxEngine.UIX.Button element
+in Operator: FrooxEngine.User mutable
+in OperatorGuard: string mutable
+in Ready: bool
+in UiReady: bool
+in Busy: bool
+in RecoveryPending: bool
+in PreviewActive: bool
+in OperationStage: int
+in Status: string mutable
+out CanInteract: bool
+where {
+    _idle = not Busy and not RecoveryPending and not PreviewActive and OperationStage == 0;
+    CanInteract = UiReady and Ready and Operator == LocalUser and _idle;
+    _claim = if UiReady and Ready and _idle and IsNull<FrooxEngine.User>(Instance=Operator) then impulse {
+        bind _guard = (OperatorGuard <- "native-user-claim").OnWritten;
+        bind _owner = (Operator <- LocalUser).OnWritten;
+        Status <- "使用中 · 登録済みアバターを選択してください";
+    };
+    _button = as<FrooxEngine.IButton>(AcquireButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_claim);
+}
