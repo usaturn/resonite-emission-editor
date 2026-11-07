@@ -1103,13 +1103,13 @@ class UIPanelPort(ResoloopPanelPort):
             single_path = stage / f"ui-{index:03d}.flux.json"
             save_new(single_path, single)
             self.read.run("flux", "validate-manifest", single_path)
-            preserved_hashes(self.read.preservation_baseline)
+            preserved_hashes(self.read.preservation_baseline, root=self.read.context.project_root)
             if self.session != self.operation_session:
                 raise ValueError("session-changed-before-ui-deploy")
             try:
                 result = self.read.run("flux", "deploy-manifest", single_path, "--library-path", library)
             finally:
-                preserved_hashes(self.read.preservation_baseline)
+                preserved_hashes(self.read.preservation_baseline, root=self.read.context.project_root)
             if self.session != self.operation_session:
                 raise ValueError("session-changed-after-ui-deploy")
             source = Path(module["source"])

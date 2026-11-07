@@ -27,11 +27,24 @@ def isolate_manifest(manifest_path, stage_root):
     return output
 
 
-def preserved_hashes(baseline):
-    """F∩S frozen evidence and user-owned history must remain byte-identical."""
+def preserved_hashes(baseline, *, root):
+    """F∩S frozen evidence and user-owned history must remain byte-identical.
+
+    Relative names resolve against the explicit project root, never the cwd,
+    and every target must stay inside that root (same rule as validate_context).
+    """
     import hashlib
+    root = Path(root).resolve()
     expected = json.loads(Path(baseline).read_text())
-    actual = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in expected}
+    actual = {}
+    for name in expected:
+        target = Path(name)
+        if not target.is_absolute():
+            target = root / target
+        target = target.resolve()
+        if not target.is_relative_to(root):
+            raise ValueError('path-outside-project-root')
+        actual[name] = hashlib.sha256(target.read_bytes()).hexdigest()
     if actual != expected:
         raise RuntimeError('Preserved artifact changed: ' + ', '.join(name for name in expected if actual[name] != expected[name]))
     return actual

@@ -188,20 +188,46 @@ def test_main_transport_rejects_legacy_checkpoint_before_recording(tmp_path, mon
     assert current.state == world
     assert current.flux_state == flux
     assert accepted.is_dir()
-    outside = tmp_path / 'outside-baseline.json'
-    outside.write_text('{}\n')
-    bad = ProjectContext(
-        project_root=root, source_root=source, registry_template=template,
-        world_state=world, flux_state=flux, preservation_baseline=outside,
-        url='ws://127.0.0.1:9', owner='tools-emission-editor',
-        root_name='ResoLoop_Test_EmissionEditor',
-    )
-    rejected = root / 'rejected'
+    outside_world = tmp_path / 'old-world' / '.resoloop' / 'state' / 'x.json'
+    for bad_world, bad_flux in ((outside_world, flux), (world, world)):
+        bad = ProjectContext(
+            project_root=root, source_root=source, registry_template=template,
+            world_state=bad_world, flux_state=bad_flux, preservation_baseline=baseline,
+            url='ws://127.0.0.1:9', owner='tools-emission-editor',
+            root_name='ResoLoop_Test_EmissionEditor',
+        )
+        rejected = root / 'rejected'
+        with pytest.raises(ValueError):
+            validate_context(bad)
+        with pytest.raises(ValueError):
+            ResoloopReadPort(bad, evidence=rejected)
+        assert not rejected.exists()
+
+
+def test_preserved_hashes_resolve_against_root_not_cwd(tmp_path, monkeypatch):
+    """S: a same-named file in the cwd must not stand in for the frozen file."""
+    import hashlib
+    import pytest
+    from scripts.emission_editor.recovery import preserved_hashes
+    root = tmp_path / 'project'
+    other = tmp_path / 'elsewhere'
+    root.mkdir()
+    other.mkdir()
+    (root / 'kept.txt').write_text('author-created')
+    (other / 'kept.txt').write_text('author-created')
+    baseline = root / 'baseline.json'
+    digest = hashlib.sha256(b'author-created').hexdigest()
+    baseline.write_text(json.dumps({'kept.txt': digest}))
+    monkeypatch.chdir(other)
+    assert preserved_hashes(baseline, root=root) == {'kept.txt': digest}
+    (root / 'kept.txt').write_text('changed')
+    with pytest.raises(RuntimeError):
+        preserved_hashes(baseline, root=root)
+    outside = tmp_path / 'outside.txt'
+    outside.write_text('author-created')
+    baseline.write_text(json.dumps({str(outside): digest}))
     with pytest.raises(ValueError):
-        validate_context(bad)
-    with pytest.raises(ValueError):
-        ResoloopReadPort(bad, evidence=rejected)
-    assert not rejected.exists()
+        preserved_hashes(baseline, root=root)
 
 
 def test_runtime_instances_cannot_replace_another_row(tmp_path):
