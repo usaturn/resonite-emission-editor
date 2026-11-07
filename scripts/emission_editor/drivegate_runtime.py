@@ -400,7 +400,9 @@ def assess_cleanup_stage(package: Path, execution: Path, last: DeployedStage,
                          cleanup: CleanupStage) -> Verdict:
     """Verify the owned restored root alone disappeared, never execute deletion.
 
-    This does not replace the earlier six-phase assessment or full preflight.
+    Requires the earlier six-phase assessment with an observable unused baseline:
+    phase-six Target == Before alone cannot prove capture/restore or re-capture
+    refusal. This does not replace that assessment or full preflight.
     A stable parent is essential: reading a missing root alone proves nothing
     about collateral removal, preservation, or its earlier ownership.
     """

@@ -225,24 +225,48 @@ def test_phase_comparison_requires_rejection_outcomes_readback_and_restoration()
     assert evaluate(baseline, broken).status == "failed"
 
 
-def test_detailed_diff_checks_operations_and_sealed_declaration_not_summary():
-    # S: a plausible zero summary conceals updates, a different declaration or state.
-    compare = evidence.compare_detailed_diff
-    data = {"valid": True, "schemaVersion": "1", "ownershipKey": "owner", "stateFile": "/fake/new/state.json",
-            "creates": 0, "updates": 0, "renames": 0, "deletes": 0, "noOps": 1,
-            "changes": [], "warnings": [], "atomic": False, "recovery": "checkpoint-and-reapply",
-            "operations": [{"action": "no-op", "kind": "slot", "key": "private", "path": "Root/試験"}]}
-    args = {"captured_declaration": b'{"slot": {}}', "sealed_declaration": b'{"slot": {}}',
-            "state_file": "/fake/new/state.json", "ownership": "owner"}
-    assert compare(data, **args).status == "passed"
-    changed = deepcopy(data)
-    changed["operations"][0]["action"] = "update"
-    assert compare(changed, **args).status == "failed"
-    changed = deepcopy(data)
-    changed["operations"] = []
-    assert compare(changed, **args).status != "passed"
-    assert compare(data, **(args | {"captured_declaration": b'{"slot": {"name":"other"}}'})).status == "failed"
-    assert compare(data, **(args | {"state_file": "/fake/old/state.json"})).status == "failed"
+@pytest.mark.parametrize("blind_spot", ["capture-color", "capture-bool", "restore-bool"])
+def test_unobservable_capture_or_restoration_cannot_pass(blind_spot):
+    # S: dropping any baseline sentinel guard blesses a skipped capture/restore.
+    baseline, observed = phase_baseline(), phases()
+    assert evidence.compare_phase_sequence(baseline, observed).status == "passed"
+    if blind_spot == "capture-color":
+        baseline["BeforeColor"]["value"] = deepcopy(baseline["ColorTarget"]["value"])
+    elif blind_spot == "capture-bool":
+        baseline["BeforeBool"]["value"] = True
+    else:
+        # Original false already equals C: phase 6 can skip the bool restore.
+        baseline["BoolTarget"]["value"] = False
+        for phase in (0, 5):
+            for name in ("BoolTarget", "BoolAfter"):
+                observed[phase][1][name]["value"] = False
+        for _, members in observed:
+            members["BeforeBool"]["value"] = False
+    assert evidence.compare_phase_sequence(baseline, observed).status != "passed"
+
+
+def test_generated_fixture_makes_capture_and_restore_observable():
+    # S: a valid probe with indistinguishable generated defaults cannot prove
+    # capture/restoration. Exercise the declared values, not a copied constant list.
+    from scripts.emission_editor.drivegate_package import fixture_declaration
+    baseline = phase_baseline()
+    declaration = fixture_declaration("offline-sentinels")
+    for component in declaration["children"][0]["components"]:
+        name = component["key"].removeprefix("drivegate-")
+        value = deepcopy(component["initialFields"]["Value"])
+        if baseline[name]["type"] == "ResoniteLink.colorX":
+            # Offline typed input, not a claim about CLI profile conversion.
+            value = dict(zip(("r", "g", "b", "a"), value)) | {"profile": "sRGB"}
+        baseline[name]["value"] = value
+    observed = phases()
+    for index, members in observed:
+        members["BeforeColor"]["value"] = {"r": 4.25, "g": .5, "b": 1.125, "a": .3125, "profile": "sRGB"}
+        if index in (1, 6):
+            for name in ("ColorTarget", "ColorAfter"):
+                members[name]["value"] = {"r": 4.25, "g": .5, "b": 1.125, "a": .3125, "profile": "sRGB"}
+    result = evidence.compare_phase_sequence(baseline, observed)
+    assert result.status == "passed", result.issues
+
 
 
 SDK_BOOL = "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<bool>"
@@ -299,14 +323,6 @@ def test_sdk_runtime_resolves_type_indices_and_all_edges_not_presentation_names(
     changed["Object"]["Children"][0]["Children"][0]["Children"][1]["Components"]["Data"][0]["Type"] = True
     assert compare(changed, runtime_bool(), **args).status != "passed"
 
-
-def test_detailed_diff_missing_changes_cannot_establish_zero_changes():
-    # S: a projected/partial result can hide changes even with plausible counts.
-    data = {"valid": True, "schemaVersion": "1", "ownershipKey": "owner", "stateFile": "/fake/new/state.json",
-            "creates": 0, "updates": 0, "renames": 0, "deletes": 0, "noOps": 1,
-            "operations": [{"action": "no-op", "kind": "slot", "key": "private", "path": "Root/試験"}]}
-    assert evidence.compare_detailed_diff(data, captured_declaration=b"{}", sealed_declaration=b"{}",
-                                      state_file="/fake/new/state.json", ownership="owner").status == "inconclusive"
 
 
 def sealed_fixture(root):

@@ -18,7 +18,8 @@ MODULES = {"probe": "DriveGateProbe", "color": "ColorDrive", "bool": "BoolDrive"
 FIELDS = {
     "Command": ("int", 0), "Captured": ("bool", False),
     "BeforeColor": ("colorX", [0.0, 0.0, 0.0, 1.0]), "BeforeBool": ("bool", False),
-    "ColorTarget": ("colorX", [0.0, 0.0, 0.0, 1.0]), "BoolTarget": ("bool", False),
+    # Distinct from Before and C/false: skipped capture/restore must be visible.
+    "ColorTarget": ("colorX", [4.25, 0.5, 1.125, 0.3125]), "BoolTarget": ("bool", True),
     "ColorOutcome": ("int", 0), "BoolOutcome": ("int", 0),
     "ColorAfter": ("colorX", [0.0, 0.0, 0.0, 1.0]), "BoolAfter": ("bool", False),
     "Done": ("int", 0),

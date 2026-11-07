@@ -373,8 +373,11 @@ def compare_phase_sequence(baseline: dict, phases: list[tuple[int, dict]]) -> Ve
 
     This is a value-only comparison, usable for offline independently authored
     fixtures as well as native raw. Helper presence/deletions, graph, receipts,
-    protected panel and fresh runtime state must be checked separately. It never
-    labels a simulated input as native success or advances/writes a command.
+    protected panel and fresh runtime state must be checked separately. The
+    unused baseline must make both capture and bool restoration observable;
+    matching preinitialized Before/Target values cannot prove those operations.
+    Re-capture refusal still requires a separate native attempt/observation.
+    This never labels a simulated input as native success or writes a command.
     """
     from copy import deepcopy
     if not isinstance(baseline, dict) or set(baseline) != set(_PHASE_TYPES):
@@ -396,6 +399,9 @@ def compare_phase_sequence(baseline: dict, phases: list[tuple[int, dict]]) -> Ve
     b = dict(zip(("r", "g", "b", "a", "profile"), (.875, 5.5, .0625, .8125, "sRGB")))
     c = dict(zip(("r", "g", "b", "a", "profile"), (2.5, .75, .125, .375, "Linear")))
     original_color, original_bool = baseline["ColorTarget"]["value"], baseline["BoolTarget"]["value"]
+    if (_strict_equal(baseline["BeforeColor"]["value"], original_color)
+            or baseline["BeforeBool"]["value"] is original_bool or original_bool is False):
+        return Verdict("failed", ("baseline-capture-or-restoration-unobservable",))
     wanted = [(original_color, original_bool, 0, 0), (a, True, 1, 1), (a, True, 2, 2),
               (b, True, 1, 2), (c, False, 1, 1), (original_color, original_bool, 1, 1)]
     if len(phases) != 6:
@@ -416,48 +422,6 @@ def compare_phase_sequence(baseline: dict, phases: list[tuple[int, dict]]) -> Ve
             result = compare_typed(expected[name], observed[name])
             if result.status != "passed":
                 return Verdict(result.status, ("phase:" + str(index) + ":" + name, *result.issues))
-    return Verdict("passed")
-
-
-def compare_detailed_diff(data: dict, *, captured_declaration: bytes, sealed_declaration: bytes,
-                          state_file: str, ownership: str) -> Verdict:
-    """Validate ApplyPlanResult zero-change semantics, NOT a capture/preflight.
-
-    Data shape is RLoop.Core/Models.cs ApplyPlanResult/ApplyPlanEntry. Caller must
-    also validate URL/time/exit and capture declaration bytes at invocation time.
-    An empty operation list or brief/summary output cannot establish convergence.
-    """
-    if captured_declaration != sealed_declaration:
-        return Verdict("failed", ("diff-declaration-changed",))
-    if not isinstance(data, dict) or not {"valid", "schemaVersion", "ownershipKey", "stateFile", "operations", "changes", "creates", "updates", "renames", "deletes", "noOps"} <= data.keys():
-        return Verdict("inconclusive", ("missing:detailed-diff",))
-    if (data["valid"] is not True or data["schemaVersion"] != "1" or data["ownershipKey"] != ownership
-            or data["stateFile"] != state_file):
-        return Verdict("failed", ("diff-context",))
-    for name in ("creates", "updates", "renames", "deletes", "noOps"):
-        if type(data[name]) is not int or data[name] < 0:
-            return Verdict("failed", ("diff-count-type",))
-    if not isinstance(data["changes"], list):
-        return Verdict("inconclusive", ("missing:diff-changes",))
-    operations = data["operations"]
-    if not isinstance(operations, list) or not operations:
-        return Verdict("inconclusive", ("missing:diff-operations",))
-    if any(data[name] != 0 for name in ("creates", "updates", "renames", "deletes")):
-        return Verdict("failed", ("diff-changes",))
-    if data["noOps"] != len(operations):
-        return Verdict("failed", ("diff-count-coverage",))
-    seen = set()
-    for op in operations:
-        if not isinstance(op, dict) or not {"action", "kind", "key", "path"} <= op.keys():
-            return Verdict("inconclusive", ("missing:diff-operation-details",))
-        if op["action"] != "no-op" or op["kind"] not in ("slot", "component"):
-            return Verdict("failed", ("diff-operation-change",))
-        ident = (op["kind"], op["key"], op["path"])
-        if not all(isinstance(v, str) and v for v in ident) or ident in seen:
-            return Verdict("failed", ("diff-operation-identity",))
-        seen.add(ident)
-        if op.get("diffs") or op.get("members") or data.get("changes"):
-            return Verdict("failed", ("diff-hidden-changes",))
     return Verdict("passed")
 
 
