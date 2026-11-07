@@ -1,0 +1,38 @@
+module RowView
+in ActiveGeneration: bool
+in SelectedRoot: FrooxEngine.Slot
+in Root0: FrooxEngine.Slot
+in Root1: FrooxEngine.Slot
+in Root2: FrooxEngine.Slot
+in Root3: FrooxEngine.Slot
+in Root4: FrooxEngine.Slot
+in Root5: FrooxEngine.Slot
+in Root6: FrooxEngine.Slot
+in Root7: FrooxEngine.Slot
+in Root8: FrooxEngine.Slot
+in Root9: FrooxEngine.Slot
+in Root10: FrooxEngine.Slot
+in Root11: FrooxEngine.Slot
+in Root12: FrooxEngine.Slot
+in Root13: FrooxEngine.Slot
+in Root14: FrooxEngine.Slot
+in Root15: FrooxEngine.Slot
+in Operator: FrooxEngine.User
+in Ready: bool
+in UiReady: bool
+in Busy: bool
+in RecoveryPending: bool
+in OperationStage: int
+in EditEpoch: int
+in SnapshotEpoch: int
+in External: bool
+in ExternalConfirmed: bool
+out Selected: bool
+out CanEdit: bool
+out CanConfirm: bool
+where {
+    Selected = ActiveGeneration and not IsNull<FrooxEngine.Slot>(Instance=SelectedRoot) and (SelectedRoot == Root0 or SelectedRoot == Root1 or SelectedRoot == Root2 or SelectedRoot == Root3 or SelectedRoot == Root4 or SelectedRoot == Root5 or SelectedRoot == Root6 or SelectedRoot == Root7 or SelectedRoot == Root8 or SelectedRoot == Root9 or SelectedRoot == Root10 or SelectedRoot == Root11 or SelectedRoot == Root12 or SelectedRoot == Root13 or SelectedRoot == Root14 or SelectedRoot == Root15);
+    CanConfirm = UiReady and Selected and Operator == LocalUser and Ready and not Busy and not RecoveryPending and OperationStage == 0;
+    CanEdit = UiReady and Selected and Operator == LocalUser and Ready and not Busy
+        and not RecoveryPending and OperationStage == 0 and SnapshotEpoch == EditEpoch and (not External or ExternalConfirmed);
+}

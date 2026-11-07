@@ -1,0 +1,44 @@
+module Session
+// Task5 S6a (design-r7 §3.4 Session: D7 claim condition, r3 N6 claim writes). CanInteract is unchanged.
+in AcquireButton: FrooxEngine.UIX.Button element
+in Operator: FrooxEngine.User mutable
+in OperatorGuard: string mutable
+in Ready: bool
+in UiReady: bool
+in Busy: bool
+in RecoveryPending: bool
+in PreviewActive: bool
+in OperationStage: int
+in Status: string mutable
+in EditEpoch: int mutable
+in SelectedRoot: FrooxEngine.Slot mutable
+in NullRoot: FrooxEngine.Slot
+out CanInteract: bool
+where {
+    _idle = not Busy and not RecoveryPending and not PreviewActive and OperationStage == 0;
+    CanInteract = UiReady and Ready and Operator == LocalUser and _idle;
+    // D7: claiming is allowed while a recovery is pending (to retry), never during an operation or a preview without one.
+    _claimable = UiReady and Ready and not Busy and OperationStage == 0 and (not PreviewActive or RecoveryPending)
+        and IsNull<FrooxEngine.User>(Instance=Operator);
+    // N6: EditEpoch <- EditEpoch + 1, then SelectedRoot <- NullRoot (only when not null), then Operator <- LocalUser.
+    // Each step runs only on the previous OnWritten: a failed earlier write ends the claim without writing Operator.
+    // The existing OperatorGuard write stays the first write (resolved S6a Q1: controller ruling, ledger 13:35:00Z).
+    // Review M-1 (controller ruling, ledger 14:00:00Z): a claim during a pending recovery shows the same text as the
+    // Selection RecoveryPending refusal instead of asking to select an avatar.
+    _claimedText = if RecoveryPending then "使用中 · 復元が未完了の行があります。元に戻す／キャンセルで再試行するか、その行の『現在値を受け入れて閉じる』で記録を閉じてください"
+        else "使用中 · 登録済みアバターを選択してください";
+    _owned = impulse {
+        bind _owner = (Operator <- LocalUser).OnWritten;
+        Status <- _claimedText;
+    };
+    _clearRoot = if IsNull<FrooxEngine.Slot>(Instance=SelectedRoot) then _owned
+        else switch (SelectedRoot <- NullRoot)
+        | OnWritten |> _owned;
+    _claim = if _claimable then impulse {
+        bind _guard = (OperatorGuard <- "native-user-claim").OnWritten;
+        bind _epoch = (EditEpoch <- EditEpoch + 1).OnWritten;
+        _clearRoot;
+    };
+    _button = as<FrooxEngine.IButton>(AcquireButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_claim);
+}

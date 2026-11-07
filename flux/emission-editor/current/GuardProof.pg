@@ -1,0 +1,30 @@
+module GuardProof
+// Task5 stage 1a: native proof of the known-use guard on an owned private fixture only.
+// ok = list non-null, expected non-null, GetAt(list, index) non-null, and GetAt(list, index) == expected (reference equality).
+// No Source/colour writes, no Drive of any material, no per-frame entrypoint.
+in Materials: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index: int
+in Expected: FrooxEngine.IAssetProvider<FrooxEngine.Material>
+in Command: int
+in ImpulseOk: bool mutable
+in Evaluations: int mutable
+in EvaluatedCommand: int mutable
+out Ok: bool
+where {
+    _current = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=Materials, Index=Index);
+    _ok = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=Materials)
+        and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=Expected)
+        and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_current)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_current, B=Expected);
+    // (i) local Drive of a private bool only. It re-evaluates when a bound source (list ref, index, expected) changes;
+    // ReferenceSource listens to the SyncRef, not to in-place edits of the list it targets, so this is not the guard.
+    Ok = _ok;
+    // (ii) impulse path: the guard is evaluated inside the impulse at the ImpulseOk write; each step continues only OnWritten.
+    _recordCommand = EvaluatedCommand <- Command;
+    _count = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=Evaluations)
+        | OnWritten |> _recordCommand;
+    _evaluate = switch (ImpulseOk <- _ok)
+        | OnWritten |> _count;
+    // Single processing user: the host. Without OnlyForUser every user would fire for a world-space Slot.
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Command, OnChanged=_evaluate);
+}

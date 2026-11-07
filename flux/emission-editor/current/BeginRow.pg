@@ -1,0 +1,42 @@
+module BeginRow
+in SourceField: FrooxEngine.IValue<colorX>
+in ActiveGeneration: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Selected: bool
+in EditEpoch: int
+in SnapshotEpoch: int mutable
+in Original: colorX mutable
+in LastApplied: colorX mutable
+in PreviewWritten: bool
+in RecoveryPending: bool
+in OperationStage: int
+in OpStage: int
+in RowPending: bool
+in InputR: string mutable
+in InputG: string mutable
+in InputB: string mutable
+in InputSeq: int mutable
+in AppliedSeq: int mutable
+in ResultSeq: int mutable
+in Result: int mutable
+where {
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
+    _parts = Unpack_ColorX(V=Original);
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+    _capture = if ActiveGeneration and UiReady and Operator == LocalUser and Selected and SnapshotEpoch != EditEpoch
+        and not PreviewWritten and not RecoveryPending and OperationStage == 0 and OpStage == 0 and not RowPending
+        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=SourceField) then impulse {
+        bind _original = (Original <- _fresh).OnWritten;
+        bind _last = (LastApplied <- Original).OnWritten;
+        bind _r = (InputR <- ToString_Float(V=_parts.R, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _g = (InputG <- ToString_Float(V=_parts.G, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _b = (InputB <- ToString_Float(V=_parts.B, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _inputSeq = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq).OnWritten;
+        bind _appliedSeq = (AppliedSeq <- InputSeq).OnWritten;
+        bind _resultSeq = (ResultSeq <- InputSeq).OnWritten;
+        bind _result = (Result <- 0).OnWritten;
+        SnapshotEpoch <- EditEpoch;
+    };
+    FireOnValueChange<int>(OnlyForUser=Operator, Value=EditEpoch, OnChanged=_capture);
+}

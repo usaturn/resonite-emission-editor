@@ -1,0 +1,6 @@
+module SessionIdentity
+// Local derived value, no impulse or shared data write. All users see this world's ID.
+out SessionID: string
+where {
+    SessionID = WorldSessionID;
+}

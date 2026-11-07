@@ -1,0 +1,312 @@
+module RowPreview
+// Task5 S3, design-r4 §3.1 (incl. r2 I1/I3/I4, r3 N2/N5, r4 R3C-M5/RB-D1). Per-row live preview of one registered
+// Source: input changes are coalesced by a 0.15 s delayed request (EditEpoch + InputSeq), checked in the order
+// (1)(3)(5)(2)(4)(6)(7), recorded write-ahead, written with FieldAsVariable and accepted only by a 5-component
+// readback. The known-use guard (GetAtObject over List0..15/Index0..15, unused uses bound to use 0) is evaluated in the
+// impulse that writes. Original is never written; no Drive of the Source; no per-frame entrypoint. Processing user:
+// the Operator (FireOnObjectValueChange OnlyForUser=Operator; every write additionally requires Operator == LocalUser).
+in ActiveGeneration: bool
+in Selected: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Ready: bool
+in Busy: bool
+in Intent: int
+in CommandKind: int
+in OperationStage: int
+in EditEpoch: int
+in SnapshotEpoch: int
+in External: bool
+in InputR: string
+in InputG: string
+in InputB: string
+in Valid: bool
+in Draft: colorX
+in SourceField: FrooxEngine.IValue<colorX>
+in Provider: FrooxEngine.IAssetProvider<FrooxEngine.Material>
+in ConfirmButton: FrooxEngine.UIX.Button element
+in ConfirmedEpoch: int mutable
+in List0: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index0: int
+in List1: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index1: int
+in List2: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index2: int
+in List3: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index3: int
+in List4: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index4: int
+in List5: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index5: int
+in List6: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index6: int
+in List7: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index7: int
+in List8: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index8: int
+in List9: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index9: int
+in List10: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index10: int
+in List11: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index11: int
+in List12: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index12: int
+in List13: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index13: int
+in List14: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index14: int
+in List15: FrooxEngine.SyncAssetList<FrooxEngine.Material>
+in Index15: int
+in LastApplied: colorX mutable
+in PreviewWritten: bool mutable
+in PreviewActive: bool mutable
+in RecoveryPending: bool mutable
+in RowPending: bool mutable
+in InputSeq: int mutable
+in AppliedSeq: int mutable
+in Result: int mutable
+in ResultSeq: int mutable
+in OpStage: int mutable
+in OpKind: int mutable
+in OpSeq: int mutable
+in OpId: int mutable
+in PendingPrevious: colorX mutable
+in PendingCandidate: colorX mutable
+out Confirmed: bool
+where {
+    // Result codes (§3.5): 0 UNCHANGED, 1 PREVIEWED, 10 INVALID, 11 BLOCKED, 12 CONFLICT, 13 GUARD, 20 FAILED,
+    // 21 STATE_FAILED. OpStage: 0 idle, 1 prepared (may have written), 2 OnWritten received, readback pending.
+    _source = FieldAsVariable<colorX>(Field=SourceField);
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
+
+    // eq(a, b): R, G, B, A and Profile compared individually (never colorX == alone).
+    _dp = Unpack_ColorX(V=Draft);
+    _lp = Unpack_ColorX(V=LastApplied);
+    _fp = Unpack_ColorX(V=_fresh);
+    _cp = Unpack_ColorX(V=PendingCandidate);
+    _pp = Unpack_ColorX(V=PendingPrevious);
+    _draftIsLast = _dp.R == _lp.R and _dp.G == _lp.G and _dp.B == _lp.B and _dp.A == _lp.A and _dp.Profile == _lp.Profile;
+    _freshIsLast = _fp.R == _lp.R and _fp.G == _lp.G and _fp.B == _lp.B and _fp.A == _lp.A and _fp.Profile == _lp.Profile;
+    _freshIsCandidate = _fp.R == _cp.R and _fp.G == _cp.G and _fp.B == _cp.B and _fp.A == _cp.A
+        and _fp.Profile == _cp.Profile;
+    _freshIsPrevious = _fp.R == _pp.R and _fp.G == _pp.G and _fp.B == _pp.B and _fp.A == _pp.A
+        and _fp.Profile == _pp.Profile;
+
+    // Known-use guard: the registered list holds the registered material at the registered index, for every use.
+    _e0 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List0, Index=Index0);
+    _g0 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List0) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e0)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e0, B=Provider);
+    _e1 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List1, Index=Index1);
+    _g1 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List1) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e1)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e1, B=Provider);
+    _e2 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List2, Index=Index2);
+    _g2 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List2) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e2)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e2, B=Provider);
+    _e3 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List3, Index=Index3);
+    _g3 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List3) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e3)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e3, B=Provider);
+    _e4 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List4, Index=Index4);
+    _g4 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List4) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e4)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e4, B=Provider);
+    _e5 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List5, Index=Index5);
+    _g5 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List5) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e5)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e5, B=Provider);
+    _e6 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List6, Index=Index6);
+    _g6 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List6) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e6)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e6, B=Provider);
+    _e7 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List7, Index=Index7);
+    _g7 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List7) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e7)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e7, B=Provider);
+    _e8 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List8, Index=Index8);
+    _g8 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List8) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e8)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e8, B=Provider);
+    _e9 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List9, Index=Index9);
+    _g9 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List9) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e9)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e9, B=Provider);
+    _e10 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List10, Index=Index10);
+    _g10 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List10) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e10)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e10, B=Provider);
+    _e11 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List11, Index=Index11);
+    _g11 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List11) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e11)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e11, B=Provider);
+    _e12 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List12, Index=Index12);
+    _g12 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List12) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e12)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e12, B=Provider);
+    _e13 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List13, Index=Index13);
+    _g13 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List13) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e13)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e13, B=Provider);
+    _e14 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List14, Index=Index14);
+    _g14 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List14) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e14)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e14, B=Provider);
+    _e15 = GetAtObject<FrooxEngine.SyncAssetList<FrooxEngine.Material>,FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Collection=List15, Index=Index15);
+    _g15 = not IsNull<FrooxEngine.SyncAssetList<FrooxEngine.Material>>(Instance=List15) and not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=_e15)
+        and ObjectEquals<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(A=_e15, B=Provider);
+    _guard = not IsNull<FrooxEngine.IAssetProvider<FrooxEngine.Material>>(Instance=Provider)
+        and _g0 and _g1 and _g2 and _g3
+        and _g4 and _g5 and _g6 and _g7
+        and _g8 and _g9 and _g10 and _g11
+        and _g12 and _g13 and _g14 and _g15;
+
+    // (I4) The external-share confirmation is valid only for the edit session (EditEpoch) it was given in.
+    _confirmed = ConfirmedEpoch == EditEpoch;
+    Confirmed = _confirmed;
+
+    local _seq: int;
+    local _epoch: int;
+
+    // (7) A record write failed: try STATE_FAILED, and once a write may have happened (OpStage >= 1) stop OK/switching.
+    _sfRow = RowPending <- true;
+    _sfFlags = if OpStage >= 1 then switch (RecoveryPending <- true)
+        | OnWritten |> _sfRow
+        | OnFail |> _sfRow;
+    _stateFailed = switch (Result <- 21)
+        | OnWritten |> _sfFlags
+        | OnFail |> _sfFlags;
+
+    // Refusals: the Source is not written; the request is still marked processed (ResultSeq <- seq).
+    _refusedSeq = switch (ResultSeq <- _seq)
+        | OnFail |> _stateFailed;
+    _rejInvalid = switch (Result <- 10)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+    _rejBlocked = switch (Result <- 11)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+    _rejConflict = switch (Result <- 12)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+    _rejGuard = switch (Result <- 13)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+
+    // (5) Draft == LastApplied: nothing to write. A refusal code (10..13) returns to PREVIEWED / UNCHANGED, except on a
+    // RowPending row, which keeps the reason of its pending restore (R3C-M5). AppliedSeq and ResultSeq always advance.
+    _resetCode = Result >= 10 and Result <= 13 and not RowPending;
+    _uSeq = switch (ResultSeq <- _seq)
+        | OnFail |> _stateFailed;
+    _uReset = if _resetCode then switch (Result <- (if PreviewWritten then 1 else 0))
+        | OnWritten |> _uSeq
+        | OnFail |> _stateFailed
+        else _uSeq;
+    _unchanged = switch (AppliedSeq <- _seq)
+        | OnWritten |> _uReset
+        | OnFail |> _stateFailed;
+
+    // (RB-D1) Success only by the 5-component readback after OnWritten.
+    _okIdle = switch (OpStage <- 0)
+        | OnFail |> _stateFailed;
+    _okSeq = switch (ResultSeq <- OpSeq)
+        | OnWritten |> _okIdle
+        | OnFail |> _stateFailed;
+    _okResult = switch (Result <- 1)
+        | OnWritten |> _okSeq
+        | OnFail |> _stateFailed;
+    _okApplied = switch (AppliedSeq <- OpSeq)
+        | OnWritten |> _okResult
+        | OnFail |> _stateFailed;
+    _accepted = switch (LastApplied <- PendingCandidate)
+        | OnWritten |> _okApplied
+        | OnFail |> _stateFailed;
+    // The value did not change (e.g. an unhooked Drive): idle again, FAILED; LastApplied/AppliedSeq not advanced.
+    _unSeq = switch (ResultSeq <- OpSeq)
+        | OnFail |> _stateFailed;
+    _unResult = switch (Result <- 20)
+        | OnWritten |> _unSeq
+        | OnFail |> _stateFailed;
+    _unapplied = switch (OpStage <- 0)
+        | OnWritten |> _unResult
+        | OnFail |> _stateFailed;
+    // Neither candidate nor previous: keep the stage, mark the row and the session for restore, FAILED.
+    _mmSeq = switch (ResultSeq <- OpSeq)
+        | OnFail |> _stateFailed;
+    _mmResult = switch (Result <- 20)
+        | OnWritten |> _mmSeq
+        | OnFail |> _stateFailed;
+    _mmRow = switch (RowPending <- true)
+        | OnWritten |> _mmResult
+        | OnFail |> _stateFailed;
+    _mismatch = switch (RecoveryPending <- true)
+        | OnWritten |> _mmRow
+        | OnFail |> _stateFailed;
+    _verify = if _freshIsCandidate then _accepted
+        else if _freshIsPrevious then _unapplied
+        else _mismatch;
+    _written = switch (OpStage <- 2)
+        | OnWritten |> _verify
+        | OnFail |> _stateFailed;
+    // Step 5 (OnFail of the Source write; per IL only a null Field, which (2) already refuses).
+    _sourceFailed = if _freshIsPrevious then _unapplied else _mismatch;
+
+    // Step 3: write-ahead record, then the Source (the only FieldAsVariable write of this module).
+    _wSource = switch (_source <- PendingCandidate)
+        | OnWritten |> _written
+        | OnFail |> _sourceFailed;
+    _wStage = switch (OpStage <- 1)
+        | OnWritten |> _wSource
+        | OnFail |> _stateFailed;
+    _wId = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _wStage
+        | OnFail |> _stateFailed;
+    _wSeq = switch (OpSeq <- _seq)
+        | OnWritten |> _wId
+        | OnFail |> _stateFailed;
+    _wKind = switch (OpKind <- 1)
+        | OnWritten |> _wSeq
+        | OnFail |> _stateFailed;
+    _wCandidate = switch (PendingCandidate <- Draft)
+        | OnWritten |> _wKind
+        | OnFail |> _stateFailed;
+    _wPrevious = switch (PendingPrevious <- LastApplied)
+        | OnWritten |> _wCandidate
+        | OnFail |> _stateFailed;
+    _wMarked = switch (PreviewWritten <- true)
+        | OnWritten |> _wPrevious
+        | OnFail |> _stateFailed;
+    _write = switch (PreviewActive <- true)
+        | OnWritten |> _wMarked
+        | OnFail |> _stateFailed;
+
+    // (2) Permission (N2: no write after CLOSE was issued; only Intent 0, or OK while it is still in CHECK).
+    _allowed = Operator == LocalUser and UiReady and Ready and not Busy and ActiveGeneration and Selected
+        and SnapshotEpoch == EditEpoch and (Intent == 0 or (Intent == 1 and CommandKind == 1))
+        and not RecoveryPending and not RowPending and OpStage == 0
+        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=SourceField);
+    // Order (1)(3)(5)(2)(4)(6)(7) (N5): (5) needs no permission because it never writes the Source.
+    _evaluate = if not Valid then _rejInvalid
+        else if _draftIsLast then _unchanged
+        else if not _allowed then _rejBlocked
+        else if External and not _confirmed then _rejBlocked
+        else if not _guard then _rejGuard
+        else if not _freshIsLast then _rejConflict
+        else _write;
+    // (1) A newer request (InputSeq moved on: input change, confirm, or an invalidation) or a new edit session drops
+    // this one without writing anything.
+    _decide = if _seq == InputSeq and _epoch == EditEpoch then _evaluate;
+    _task = impulse {
+        bind _d = DelayWithValueSecondsFloat<int>(Value=InputSeq, Duration=0.15).Next;
+        bind _d1 = (_seq <- _d.DelayedValue).OnWritten;
+        _decide;
+    };
+    // Every change by the operator advances InputSeq (an invalid input also invalidates the waiting request).
+    _start = StartAsyncTask(TaskStart=_task);
+    _request = if Operator == LocalUser and ActiveGeneration then impulse {
+        bind _rq0 = (_epoch <- EditEpoch).OnWritten;
+        switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq)
+        | OnWritten |> _start
+        | OnFail |> _stateFailed;
+    };
+
+    // (I4) Confirmation press: toggles ConfirmedEpoch for the current edit session, then re-evaluates via a request.
+    _confirmAllowed = Operator == LocalUser and ActiveGeneration and Selected and UiReady and Ready and not Busy
+        and Intent == 0 and OperationStage == 0 and SnapshotEpoch == EditEpoch and External;
+    _confirm = if _confirmAllowed then switch (ConfirmedEpoch <- (if _confirmed then -1 else EditEpoch))
+        | OnWritten |> _request
+        | OnFail |> _stateFailed;
+
+    FireOnObjectValueChange<string>(OnlyForUser=Operator, Value=InputR, OnChanged=_request);
+    FireOnObjectValueChange<string>(OnlyForUser=Operator, Value=InputG, OnChanged=_request);
+    FireOnObjectValueChange<string>(OnlyForUser=Operator, Value=InputB, OnChanged=_request);
+    _button = as<FrooxEngine.IButton>(ConfirmButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_confirm);
+}

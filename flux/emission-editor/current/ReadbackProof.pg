@@ -1,0 +1,214 @@
+module ReadbackProof
+// Task5 S2 (design 4-1, 4-5): same-impulse readback after a FieldAsVariable assignment, ValueCopy mirror lag,
+// and the write continuations of driven / null targets, plus (record only) an assignment to a WriteBack=true
+// ValueCopy target. Owned private ValueField<colorX> fields only; no material,
+// renderer or avatar. Single processing user: the host. No per-frame entrypoint and no Drive of the Source.
+in Command: int
+in SourceField: FrooxEngine.IValue<colorX>
+in Mirror: colorX
+in MirrorField: FrooxEngine.IValue<colorX>
+in DrivenField: FrooxEngine.IValue<colorX>
+in NullField: FrooxEngine.IValue<colorX>
+in DrivenSeed: colorX
+in Before: colorX mutable
+in DrivenRecord: colorX mutable
+in FOutcome: int mutable
+in FSame: colorX mutable
+in FSameMirror: colorX mutable
+in FNext: colorX mutable
+in FNextMirror: colorX mutable
+in FRestoreOutcome: int mutable
+in FT0: double mutable
+in FT1: double mutable
+in FDone: int mutable
+in DOutcomeMirror: int mutable
+in DOutcomeDriven: int mutable
+in DOutcomeNull: int mutable
+in DOutcomeRecord: int mutable
+in DMirrorAfter: colorX mutable
+in DDrivenAfter: colorX mutable
+in DDone: int mutable
+in XOutcome: int mutable
+in XRead: colorX mutable
+in XDone: int mutable
+in WbField: FrooxEngine.IValue<colorX>
+in WbSrc: colorX
+in WOutcome: int mutable
+in WTargetAfter: colorX mutable
+in WSrcAfter: colorX mutable
+in WDone: int mutable
+out Driven: colorX
+where {
+    _source = FieldAsVariable<colorX>(Field=SourceField);
+    _mirrorTarget = FieldAsVariable<colorX>(Field=MirrorField);
+    _drivenTarget = FieldAsVariable<colorX>(Field=DrivenField);
+    _nullTarget = FieldAsVariable<colorX>(Field=NullField);
+    _direct = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
+    _drivenNow = ValueSource<colorX>(Source=asDrivenGlobal(DrivenField));
+    _wbTarget = FieldAsVariable<colorX>(Field=WbField);
+    _wbNow = ValueSource<colorX>(Source=asDrivenGlobal(WbField));
+    _srgb = IntToEnum<Renderite.Shared.ColorProfile>(1);
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    _candA = Pack_ColorX(R=1.25, G=15.5, B=271.0, A=0.375, Profile=_srgb);
+    _candL = Pack_ColorX(R=2.0, G=1.0, B=0.5, A=0.625, Profile=_linear);
+    // Before still holds the sentinel (-1,-1,-1,-1) until the native capture (command 1).
+    _bp = Unpack_ColorX(V=Before);
+    _captured = not (_bp.R == -1.0 and _bp.G == -1.0 and _bp.B == -1.0 and _bp.A == -1.0);
+    local _cand: colorX;
+    // (4-5 b/d) Unhooked ProtoFlux drive of a private field: the target of the driven-write attempts.
+    Driven = DrivenSeed;
+
+    // Capture / restore / refusal record (commands 1 and >= 10).
+    _xDone = XDone <- Command;
+    _xRead = impulse {
+        bind _xr0 = (XRead <- _direct).OnWritten;
+        _xDone;
+    };
+    _xWritten = impulse {
+        bind _xw0 = (XOutcome <- 1).OnWritten;
+        _xRead;
+    };
+    _xFailed = impulse {
+        bind _xf0 = (XOutcome <- 2).OnWritten;
+        _xRead;
+    };
+    _xRefused = impulse {
+        bind _xn0 = (XOutcome <- 3).OnWritten;
+        _xRead;
+    };
+    _capture = switch (Before <- _direct)
+        | OnWritten |> _xWritten
+        | OnFail |> _xFailed;
+    _restore = switch (_source <- Before)
+        | OnWritten |> _xWritten
+        | OnFail |> _xFailed;
+
+    // (4-1) Fresh read: every path records the same witnesses, then FDone.
+    _fDone = FDone <- Command;
+    _fRestoreWritten = impulse {
+        bind _fr1 = (FRestoreOutcome <- 1).OnWritten;
+        _fDone;
+    };
+    _fRestoreFailed = impulse {
+        bind _fr2 = (FRestoreOutcome <- 2).OnWritten;
+        _fDone;
+    };
+    _fNext = impulse {
+        bind _fn0 = DelayUpdates(Updates=1).Next;
+        bind _fn1 = (FNext <- _direct).OnWritten;
+        bind _fn2 = (FNextMirror <- Mirror).OnWritten;
+        bind _fn3 = (FT1 <- WorldTimeDouble).OnWritten;
+        switch (_source <- Before)
+        | OnWritten |> _fRestoreWritten
+        | OnFail |> _fRestoreFailed;
+    };
+    _fWritten = impulse {
+        bind _fw1 = (FSame <- _direct).OnWritten;
+        bind _fw2 = (FSameMirror <- Mirror).OnWritten;
+        bind _fw3 = (FT0 <- WorldTimeDouble).OnWritten;
+        bind _fw4 = (FOutcome <- 1).OnWritten;
+        StartAsyncTask(TaskStart=_fNext);
+    };
+    _fFailed = impulse {
+        bind _ff1 = (FSame <- _direct).OnWritten;
+        bind _ff2 = (FSameMirror <- Mirror).OnWritten;
+        bind _ff3 = (FT0 <- WorldTimeDouble).OnWritten;
+        bind _ff4 = (FOutcome <- 2).OnWritten;
+        StartAsyncTask(TaskStart=_fNext);
+    };
+    _fBody = switch (_source <- _cand)
+        | OnWritten |> _fWritten
+        | OnFail |> _fFailed;
+    _freshA = impulse {
+        bind _fa0 = (_cand <- _candA).OnWritten;
+        _fBody;
+    };
+    _freshL = impulse {
+        bind _fl0 = (_cand <- _candL).OnWritten;
+        _fBody;
+    };
+
+    // (4-5) Write continuations: (a) ValueCopy-driven mirror, (b) ProtoFlux-driven field, (c) null target, all via
+    // FieldAsVariable; (d) the same driven field via a mutable module input (ValueSource.Write).
+    _dDone = DDone <- Command;
+    _dAfter = impulse {
+        bind _da1 = (DMirrorAfter <- Mirror).OnWritten;
+        bind _da2 = (DDrivenAfter <- _drivenNow).OnWritten;
+        _dDone;
+    };
+    _d4w = impulse {
+        bind _d4a = (DOutcomeRecord <- 1).OnWritten;
+        _dAfter;
+    };
+    _d4f = impulse {
+        bind _d4b = (DOutcomeRecord <- 2).OnWritten;
+        _dAfter;
+    };
+    _d4 = switch (DrivenRecord <- _candA)
+        | OnWritten |> _d4w
+        | OnFail |> _d4f;
+    _d3w = impulse {
+        bind _d3a = (DOutcomeNull <- 1).OnWritten;
+        _d4;
+    };
+    _d3f = impulse {
+        bind _d3b = (DOutcomeNull <- 2).OnWritten;
+        _d4;
+    };
+    _d3 = switch (_nullTarget <- _candA)
+        | OnWritten |> _d3w
+        | OnFail |> _d3f;
+    _d2w = impulse {
+        bind _d2a = (DOutcomeDriven <- 1).OnWritten;
+        _d3;
+    };
+    _d2f = impulse {
+        bind _d2b = (DOutcomeDriven <- 2).OnWritten;
+        _d3;
+    };
+    _d2 = switch (_drivenTarget <- _candA)
+        | OnWritten |> _d2w
+        | OnFail |> _d2f;
+    _d1w = impulse {
+        bind _d1a = (DOutcomeMirror <- 1).OnWritten;
+        _d2;
+    };
+    _d1f = impulse {
+        bind _d1b = (DOutcomeMirror <- 2).OnWritten;
+        _d2;
+    };
+    _d1 = switch (_mirrorTarget <- _candA)
+        | OnWritten |> _d1w
+        | OnFail |> _d1f;
+
+    // (record only, command 5) Assignment to the Target of a WriteBack=true ValueCopy (private fields only): does the
+    // hook write the copy's Source as well, and which continuation fires.
+    _wDone = WDone <- Command;
+    _wAfter = impulse {
+        bind _wa1 = (WTargetAfter <- _wbNow).OnWritten;
+        bind _wa2 = (WSrcAfter <- WbSrc).OnWritten;
+        _wDone;
+    };
+    _wWritten = impulse {
+        bind _ww0 = (WOutcome <- 1).OnWritten;
+        _wAfter;
+    };
+    _wFailed = impulse {
+        bind _wf0 = (WOutcome <- 2).OnWritten;
+        _wAfter;
+    };
+    _w1 = switch (_wbTarget <- _candA)
+        | OnWritten |> _wWritten
+        | OnFail |> _wFailed;
+
+    // Capture only once (never overwrite the native Before); every other command needs the capture.
+    _captureOnce = if _captured then _xRefused else _capture;
+    _dispatch = if Command == 1 then _captureOnce
+        else if not _captured then _xRefused
+        else if Command == 2 then _freshA
+        else if Command == 3 then _freshL
+        else if Command == 4 then _d1
+        else if Command == 5 then _w1
+        else if Command >= 10 then _restore;
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Command, OnChanged=_dispatch);
+}

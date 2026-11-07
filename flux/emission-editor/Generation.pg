@@ -1,0 +1,5 @@
+module Generation
+in Generation: string
+in Active: string
+out Visible: bool
+where { Visible = Generation == Active; }

@@ -1,0 +1,33 @@
+module BeginRow
+in SourceField: FrooxEngine.IValue<colorX>
+in Current: colorX
+in ActiveGeneration: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Selected: bool
+in EditEpoch: int
+in SnapshotEpoch: int mutable
+in Original: colorX mutable
+in LastApplied: colorX mutable
+in PreviewWritten: bool
+in RecoveryPending: bool
+in OperationStage: int
+in InputR: string mutable
+in InputG: string mutable
+in InputB: string mutable
+where {
+    _current = Current;
+    _parts = Unpack_ColorX(V=Original);
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+    _capture = if ActiveGeneration and UiReady and Operator == LocalUser and Selected and SnapshotEpoch != EditEpoch
+        and not PreviewWritten and not RecoveryPending and OperationStage == 0
+        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=SourceField) then impulse {
+        bind _original = (Original <- _current).OnWritten;
+        bind _last = (LastApplied <- Original).OnWritten;
+        bind _r = (InputR <- ToString_Float(V=_parts.R, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _g = (InputG <- ToString_Float(V=_parts.G, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _b = (InputB <- ToString_Float(V=_parts.B, Format="R", FormatProvider=_culture)).OnWritten;
+        SnapshotEpoch <- EditEpoch;
+    };
+    FireOnValueChange<int>(OnlyForUser=Operator, Value=EditEpoch, OnChanged=_capture);
+}

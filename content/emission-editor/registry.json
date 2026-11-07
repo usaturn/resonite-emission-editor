@@ -1,0 +1,1680 @@
+{
+  "schemaVersion": "1",
+  "ownership": {
+    "key": "tools-emission-editor"
+  },
+  "slot": {
+    "key": "emission-root",
+    "name": "ResoLoop_Test_EmissionEditor",
+    "parent": "Root"
+  },
+  "children": [
+    {
+      "slot": {
+        "key": "fixture-root",
+        "name": "Task1_OwnedFixture"
+      },
+      "children": [
+        {
+          "slot": {
+            "key": "fixture-material-slot",
+            "name": "試験用_EmissionMaterial"
+          },
+          "components": [
+            {
+              "key": "fixture-material",
+              "type": "[FrooxEngine]FrooxEngine.XiexeToonMaterial",
+              "initialFields": {
+                "EmissionColor": [
+                  2,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "source-reference-slot",
+            "name": "RegisteredSource"
+          },
+          "components": [
+            {
+              "key": "source-reference",
+              "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.IValue<colorX>>"
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "baseline-slot",
+            "name": "baseline"
+          },
+          "components": [
+            {
+              "key": "baseline",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<colorX>",
+              "initialFields": {
+                "Value": [
+                  2,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "input-r-slot",
+            "name": "input-r"
+          },
+          "components": [
+            {
+              "key": "input-r",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": "2"
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "input-g-slot",
+            "name": "input-g"
+          },
+          "components": [
+            {
+              "key": "input-g",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": "1"
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "input-b-slot",
+            "name": "input-b"
+          },
+          "components": [
+            {
+              "key": "input-b",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": "1"
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "status-slot",
+            "name": "status"
+          },
+          "components": [
+            {
+              "key": "status",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": "READY"
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "valid-slot",
+            "name": "valid"
+          },
+          "components": [
+            {
+              "key": "valid",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "dirty-slot",
+            "name": "dirty"
+          },
+          "components": [
+            {
+              "key": "dirty",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "draft-slot",
+            "name": "draft"
+          },
+          "components": [
+            {
+              "key": "draft",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<colorX>",
+              "initialFields": {
+                "Value": [
+                  2,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "current-slot",
+            "name": "current"
+          },
+          "components": [
+            {
+              "key": "current",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<colorX>",
+              "initialFields": {
+                "Value": [
+                  2,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "profile-is-srgb-slot",
+            "name": "profile-is-srgb"
+          },
+          "components": [
+            {
+              "key": "profile-is-srgb",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "preview-enabled-slot",
+            "name": "preview-enabled"
+          },
+          "components": [
+            {
+              "key": "preview-enabled",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "restore-slot",
+            "name": "restore"
+          },
+          "components": [
+            {
+              "key": "restore",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "pending-slot",
+            "name": "pending"
+          },
+          "components": [
+            {
+              "key": "pending",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "last-applied-slot",
+            "name": "last-applied"
+          },
+          "components": [
+            {
+              "key": "last-applied",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<colorX>",
+              "initialFields": {
+                "Value": [
+                  2,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "captured-reference-slot",
+            "name": "CapturedSource"
+          },
+          "components": [
+            {
+              "key": "captured-reference",
+              "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.IValue<colorX>>"
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "fault-hold-slot",
+            "name": "FaultHold"
+          },
+          "components": [
+            {
+              "key": "fault-hold",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<colorX>",
+              "initialFields": {
+                "Value": [
+                  0.5,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "candidate-slot",
+            "name": "candidate"
+          },
+          "components": [
+            {
+              "key": "candidate",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<colorX>",
+              "initialFields": {
+                "Value": [
+                  2,
+                  1,
+                  1,
+                  0.37
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "operation-stage-slot",
+            "name": "operation-stage"
+          },
+          "components": [
+            {
+              "key": "operation-stage",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<int>",
+              "initialFields": {
+                "Value": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slot": {
+        "key": "registry-root",
+        "name": "Registry"
+      },
+      "children": [
+        {
+          "slot": {
+            "key": "registry-ready-slot",
+            "name": "registry-ready"
+          },
+          "components": [
+            {
+              "key": "registry-ready",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-busy-slot",
+            "name": "registry-busy"
+          },
+          "components": [
+            {
+              "key": "registry-busy",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-operator-slot",
+            "name": "registry-operator"
+          },
+          "components": [
+            {
+              "key": "registry-operator",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": ""
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-pending-slot",
+            "name": "registry-pending"
+          },
+          "components": [
+            {
+              "key": "registry-pending",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-preview-active-slot",
+            "name": "registry-preview-active"
+          },
+          "components": [
+            {
+              "key": "registry-preview-active",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-operation-stage-slot",
+            "name": "registry-operation-stage"
+          },
+          "components": [
+            {
+              "key": "registry-operation-stage",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<int>",
+              "initialFields": {
+                "Value": 0
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-active-slot",
+            "name": "registry-active"
+          },
+          "components": [
+            {
+              "key": "registry-active",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": ""
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-generation-slot",
+            "name": "registry-generation"
+          },
+          "components": [
+            {
+              "key": "registry-generation",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": ""
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-session-slot",
+            "name": "registry-session"
+          },
+          "components": [
+            {
+              "key": "registry-session",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": ""
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-publication-slot",
+            "name": "registry-publication"
+          },
+          "components": [
+            {
+              "key": "registry-publication",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+              "initialFields": {
+                "Value": ""
+              }
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "registry-codec-root",
+            "name": "RegistryTransportProof"
+          },
+          "children": [
+            {
+              "slot": {
+                "key": "registry-codec-color-slot",
+                "name": "registry-codec-color"
+              },
+              "components": [
+                {
+                  "key": "registry-codec-color",
+                  "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.IValue<colorX>>"
+                }
+              ]
+            },
+            {
+              "slot": {
+                "key": "registry-codec-material-slot",
+                "name": "registry-codec-material"
+              },
+              "components": [
+                {
+                  "key": "registry-codec-material",
+                  "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.Component>"
+                }
+              ]
+            },
+            {
+              "slot": {
+                "key": "registry-codec-mesh-slot",
+                "name": "registry-codec-mesh"
+              },
+              "components": [
+                {
+                  "key": "registry-codec-mesh",
+                  "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.Slot>"
+                }
+              ]
+            },
+            {
+              "slot": {
+                "key": "registry-codec-text-slot",
+                "name": "registry-codec-text"
+              },
+              "components": [
+                {
+                  "key": "registry-codec-text",
+                  "type": "[FrooxEngine]FrooxEngine.ValueField<string>",
+                  "initialFields": {
+                    "Value": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "ui-operator-slot",
+            "name": "ui-operator-slot"
+          },
+          "components": [
+            {
+              "key": "ui-operator",
+              "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.User>"
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-selected-root-slot",
+            "name": "ui-selected-root-slot"
+          },
+          "components": [
+            {
+              "key": "ui-selected-root",
+              "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.Slot>"
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-pending-root-slot",
+            "name": "ui-pending-root-slot"
+          },
+          "components": [
+            {
+              "key": "ui-pending-root",
+              "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.Slot>"
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-null-root-slot",
+            "name": "ui-null-root-slot"
+          },
+          "components": [
+            {
+              "key": "ui-null-root",
+              "type": "[FrooxEngine]FrooxEngine.ReferenceField<[FrooxEngine]FrooxEngine.Slot>"
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-edit-epoch-slot",
+            "name": "ui-edit-epoch-slot"
+          },
+          "components": [
+            {
+              "key": "ui-edit-epoch",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<int>",
+              "initialFields": {
+                "Value": 0
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-ready-slot",
+            "name": "ui-ready-slot"
+          },
+          "components": [
+            {
+              "key": "ui-ready",
+              "type": "[FrooxEngine]FrooxEngine.ValueMultiDriver<bool>",
+              "fields": {
+                "Drives": [
+                  "$member:ui-drop-receiver.Enabled"
+                ]
+              },
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-status-slot",
+            "name": "ui-status-slot"
+          },
+          "components": [
+            {
+              "key": "ui-status",
+              "type": "[FrooxEngine]FrooxEngine.ValueMultiDriver<string>",
+              "fields": {
+                "Drives": [
+                  "$member:ui-status-display-text.Content"
+                ]
+              },
+              "initialFields": {
+                "Value": "操作を開始してください"
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-external-confirmed-slot",
+            "name": "ui-external-confirmed-slot"
+          },
+          "components": [
+            {
+              "key": "ui-external-confirmed",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-runtime-ready-slot",
+            "name": "ui-runtime-ready-slot"
+          },
+          "components": [
+            {
+              "key": "ui-runtime-ready",
+              "type": "[FrooxEngine]FrooxEngine.ValueField<bool>",
+              "initialFields": {
+                "Value": false
+              }
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "slot": {
+        "key": "ui-assets",
+        "name": "ui-assets"
+      },
+      "components": [],
+      "children": [
+        {
+          "slot": {
+            "key": "ui-front-material-slot",
+            "name": "ui-front-material-slot"
+          },
+          "components": [
+            {
+              "key": "ui-front-material",
+              "type": "[FrooxEngine]FrooxEngine.UI_UnlitMaterial",
+              "fields": {
+                "ZWrite": "On",
+                "ZTest": "LessOrEqual",
+                "OffsetFactor": 1,
+                "OffsetUnits": 100
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-rear-material-slot",
+            "name": "ui-rear-material-slot"
+          },
+          "components": [
+            {
+              "key": "ui-rear-material",
+              "type": "[FrooxEngine]FrooxEngine.UI_UnlitMaterial",
+              "fields": {
+                "ZWrite": "On",
+                "ZTest": "LessOrEqual",
+                "OffsetFactor": 1,
+                "OffsetUnits": 100,
+                "Sidedness": "Back"
+              }
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "slot": {
+        "key": "ui-canvas",
+        "name": "ui-canvas",
+        "scale": [
+          0.000625,
+          0.000625,
+          0.000625
+        ]
+      },
+      "components": [
+        {
+          "key": "ui-canvas-component",
+          "type": "[FrooxEngine]FrooxEngine.UIX.Canvas",
+          "fields": {
+            "Size": [
+              1440,
+              900
+            ],
+            "UnitScale": 1
+          }
+        }
+      ],
+      "children": [
+        {
+          "slot": {
+            "key": "ui-backdrop",
+            "name": "ui-backdrop"
+          },
+          "components": [
+            {
+              "key": "ui-backdrop-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  0,
+                  -900
+                ],
+                "OffsetMax": [
+                  1440,
+                  0
+                ]
+              }
+            },
+            {
+              "key": "ui-backdrop-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.035,
+                  0.047,
+                  0.061,
+                  1
+                ],
+                "InteractionTarget": false,
+                "Material": "$component:ui-front-material"
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-rear-cover",
+            "name": "ui-rear-cover"
+          },
+          "components": [
+            {
+              "key": "ui-rear-cover-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  0,
+                  -900
+                ],
+                "OffsetMax": [
+                  1440,
+                  0
+                ]
+              }
+            },
+            {
+              "key": "ui-rear-cover-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.035,
+                  0.047,
+                  0.061,
+                  1
+                ],
+                "InteractionTarget": false,
+                "Material": "$component:ui-rear-material"
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-title",
+            "name": "ui-title"
+          },
+          "components": [
+            {
+              "key": "ui-title-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  32,
+                  -76
+                ],
+                "OffsetMax": [
+                  982,
+                  -24
+                ]
+              }
+            },
+            {
+              "key": "ui-title-text",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+              "fields": {
+                "Size": 36,
+                "Color": [
+                  0.12,
+                  0.85,
+                  0.91,
+                  1
+                ],
+                "ParseRichText": false,
+                "Content": "AVATAR  /  EMISSION"
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-subtitle",
+            "name": "ui-subtitle"
+          },
+          "components": [
+            {
+              "key": "ui-subtitle-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  32,
+                  -118
+                ],
+                "OffsetMax": [
+                  1412,
+                  -78
+                ]
+              }
+            },
+            {
+              "key": "ui-subtitle-text",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+              "fields": {
+                "Size": 21,
+                "Color": [
+                  0.88,
+                  0.93,
+                  0.96,
+                  1
+                ],
+                "ParseRichText": false,
+                "Content": "登録済みのアバターだけを編集 · RGB は小数点 . / 指数表記に対応"
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-acquire",
+            "name": "ui-acquire"
+          },
+          "components": [
+            {
+              "key": "ui-acquire-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  1195,
+                  -78
+                ],
+                "OffsetMax": [
+                  1405,
+                  -28
+                ]
+              }
+            },
+            {
+              "key": "ui-acquire-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.08,
+                  0.19,
+                  0.23,
+                  1
+                ],
+                "InteractionTarget": true
+              }
+            },
+            {
+              "key": "ui-acquire-button",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Button",
+              "fields": {
+                "SendSlotEvents": true
+              }
+            }
+          ],
+          "children": [
+            {
+              "slot": {
+                "key": "ui-acquire-label",
+                "name": "ui-acquire-label"
+              },
+              "components": [
+                {
+                  "key": "ui-acquire-label-rect",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+                  "fields": {
+                    "AnchorMin": [
+                      0,
+                      1
+                    ],
+                    "AnchorMax": [
+                      0,
+                      1
+                    ],
+                    "Pivot": [
+                      0,
+                      1
+                    ],
+                    "OffsetMin": [
+                      14,
+                      -46
+                    ],
+                    "OffsetMax": [
+                      196,
+                      -8
+                    ]
+                  }
+                },
+                {
+                  "key": "ui-acquire-label-text",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+                  "fields": {
+                    "Size": 23,
+                    "Color": [
+                      0.88,
+                      0.93,
+                      0.96,
+                      1
+                    ],
+                    "ParseRichText": false,
+                    "Content": "編集を開始"
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "ui-status-display",
+            "name": "ui-status-display"
+          },
+          "components": [
+            {
+              "key": "ui-status-display-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  32,
+                  -868
+                ],
+                "OffsetMax": [
+                  752,
+                  -820
+                ]
+              }
+            },
+            {
+              "key": "ui-status-display-text",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+              "fields": {
+                "Size": 22,
+                "Color": [
+                  0.12,
+                  0.85,
+                  0.91,
+                  1
+                ],
+                "ParseRichText": false
+              },
+              "initialFields": {
+                "Content": "操作を開始してください"
+              }
+            }
+          ],
+          "children": []
+        },
+        {
+          "slot": {
+            "key": "ui-reload",
+            "name": "ui-reload"
+          },
+          "components": [
+            {
+              "key": "ui-reload-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  30,
+                  -796
+                ],
+                "OffsetMax": [
+                  210,
+                  -746
+                ]
+              }
+            },
+            {
+              "key": "ui-reload-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.08,
+                  0.19,
+                  0.23,
+                  1
+                ],
+                "InteractionTarget": true
+              }
+            },
+            {
+              "key": "ui-reload-button",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Button",
+              "fields": {
+                "SendSlotEvents": true
+              }
+            }
+          ],
+          "children": [
+            {
+              "slot": {
+                "key": "ui-reload-label",
+                "name": "ui-reload-label"
+              },
+              "components": [
+                {
+                  "key": "ui-reload-label-rect",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+                  "fields": {
+                    "AnchorMin": [
+                      0,
+                      1
+                    ],
+                    "AnchorMax": [
+                      0,
+                      1
+                    ],
+                    "Pivot": [
+                      0,
+                      1
+                    ],
+                    "OffsetMin": [
+                      14,
+                      -46
+                    ],
+                    "OffsetMax": [
+                      166,
+                      -8
+                    ]
+                  }
+                },
+                {
+                  "key": "ui-reload-label-text",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+                  "fields": {
+                    "Size": 23,
+                    "Color": [
+                      0.88,
+                      0.93,
+                      0.96,
+                      1
+                    ],
+                    "ParseRichText": false,
+                    "Content": "値を再読込"
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "ui-restore",
+            "name": "ui-restore"
+          },
+          "components": [
+            {
+              "key": "ui-restore-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  780,
+                  -876
+                ],
+                "OffsetMax": [
+                  960,
+                  -826
+                ]
+              }
+            },
+            {
+              "key": "ui-restore-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.08,
+                  0.19,
+                  0.23,
+                  1
+                ],
+                "InteractionTarget": true
+              }
+            },
+            {
+              "key": "ui-restore-button",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Button",
+              "fields": {
+                "SendSlotEvents": true
+              }
+            }
+          ],
+          "children": [
+            {
+              "slot": {
+                "key": "ui-restore-label",
+                "name": "ui-restore-label"
+              },
+              "components": [
+                {
+                  "key": "ui-restore-label-rect",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+                  "fields": {
+                    "AnchorMin": [
+                      0,
+                      1
+                    ],
+                    "AnchorMax": [
+                      0,
+                      1
+                    ],
+                    "Pivot": [
+                      0,
+                      1
+                    ],
+                    "OffsetMin": [
+                      14,
+                      -46
+                    ],
+                    "OffsetMax": [
+                      166,
+                      -8
+                    ]
+                  }
+                },
+                {
+                  "key": "ui-restore-label-text",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+                  "fields": {
+                    "Size": 23,
+                    "Color": [
+                      0.88,
+                      0.93,
+                      0.96,
+                      1
+                    ],
+                    "ParseRichText": false,
+                    "Content": "元に戻す"
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "ui-cancel",
+            "name": "ui-cancel"
+          },
+          "components": [
+            {
+              "key": "ui-cancel-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  980,
+                  -876
+                ],
+                "OffsetMax": [
+                  1160,
+                  -826
+                ]
+              }
+            },
+            {
+              "key": "ui-cancel-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.08,
+                  0.19,
+                  0.23,
+                  1
+                ],
+                "InteractionTarget": true
+              }
+            },
+            {
+              "key": "ui-cancel-button",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Button",
+              "fields": {
+                "SendSlotEvents": true
+              }
+            }
+          ],
+          "children": [
+            {
+              "slot": {
+                "key": "ui-cancel-label",
+                "name": "ui-cancel-label"
+              },
+              "components": [
+                {
+                  "key": "ui-cancel-label-rect",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+                  "fields": {
+                    "AnchorMin": [
+                      0,
+                      1
+                    ],
+                    "AnchorMax": [
+                      0,
+                      1
+                    ],
+                    "Pivot": [
+                      0,
+                      1
+                    ],
+                    "OffsetMin": [
+                      14,
+                      -46
+                    ],
+                    "OffsetMax": [
+                      166,
+                      -8
+                    ]
+                  }
+                },
+                {
+                  "key": "ui-cancel-label-text",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+                  "fields": {
+                    "Size": 23,
+                    "Color": [
+                      0.88,
+                      0.93,
+                      0.96,
+                      1
+                    ],
+                    "ParseRichText": false,
+                    "Content": "キャンセル"
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "ui-ok",
+            "name": "ui-ok"
+          },
+          "components": [
+            {
+              "key": "ui-ok-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  1180,
+                  -876
+                ],
+                "OffsetMax": [
+                  1400,
+                  -826
+                ]
+              }
+            },
+            {
+              "key": "ui-ok-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.08,
+                  0.19,
+                  0.23,
+                  1
+                ],
+                "InteractionTarget": true
+              }
+            },
+            {
+              "key": "ui-ok-button",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Button",
+              "fields": {
+                "SendSlotEvents": true
+              }
+            }
+          ],
+          "children": [
+            {
+              "slot": {
+                "key": "ui-ok-label",
+                "name": "ui-ok-label"
+              },
+              "components": [
+                {
+                  "key": "ui-ok-label-rect",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+                  "fields": {
+                    "AnchorMin": [
+                      0,
+                      1
+                    ],
+                    "AnchorMax": [
+                      0,
+                      1
+                    ],
+                    "Pivot": [
+                      0,
+                      1
+                    ],
+                    "OffsetMin": [
+                      14,
+                      -46
+                    ],
+                    "OffsetMax": [
+                      206,
+                      -8
+                    ]
+                  }
+                },
+                {
+                  "key": "ui-ok-label-text",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+                  "fields": {
+                    "Size": 23,
+                    "Color": [
+                      0.88,
+                      0.93,
+                      0.96,
+                      1
+                    ],
+                    "ParseRichText": false,
+                    "Content": "OK"
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "slot": {
+            "key": "ui-drop",
+            "name": "ui-drop"
+          },
+          "components": [
+            {
+              "key": "ui-drop-rect",
+              "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+              "fields": {
+                "AnchorMin": [
+                  0,
+                  1
+                ],
+                "AnchorMax": [
+                  0,
+                  1
+                ],
+                "Pivot": [
+                  0,
+                  1
+                ],
+                "OffsetMin": [
+                  30,
+                  -196
+                ],
+                "OffsetMax": [
+                  1410,
+                  -126
+                ]
+              }
+            },
+            {
+              "key": "ui-drop-image",
+              "type": "[FrooxEngine]FrooxEngine.UIX.Image",
+              "fields": {
+                "Tint": [
+                  0.045,
+                  0.11,
+                  0.14,
+                  1
+                ],
+                "InteractionTarget": true
+              }
+            },
+            {
+              "key": "ui-drop-receiver",
+              "type": "[FrooxEngine]FrooxEngine.UIX.ReferenceReceiver<[FrooxEngine]FrooxEngine.Slot>",
+              "fields": {
+                "Reference": "$member:ui-pending-root.Reference",
+                "Undoable": false
+              }
+            }
+          ],
+          "children": [
+            {
+              "slot": {
+                "key": "ui-drop-label",
+                "name": "ui-drop-label"
+              },
+              "components": [
+                {
+                  "key": "ui-drop-label-rect",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.RectTransform",
+                  "fields": {
+                    "AnchorMin": [
+                      0,
+                      1
+                    ],
+                    "AnchorMax": [
+                      0,
+                      1
+                    ],
+                    "Pivot": [
+                      0,
+                      1
+                    ],
+                    "OffsetMin": [
+                      18,
+                      -59
+                    ],
+                    "OffsetMax": [
+                      1318,
+                      -15
+                    ]
+                  }
+                },
+                {
+                  "key": "ui-drop-label-text",
+                  "type": "[FrooxEngine]FrooxEngine.UIX.Text",
+                  "fields": {
+                    "Size": 25,
+                    "Color": [
+                      0.12,
+                      0.85,
+                      0.91,
+                      1
+                    ],
+                    "ParseRichText": false,
+                    "Content": "登録済みルートをここへドロップ"
+                  }
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "components": [
+    {
+      "key": "emission-object-root",
+      "type": "[FrooxEngine]FrooxEngine.ObjectRoot"
+    },
+    {
+      "key": "emission-grabbable",
+      "type": "[FrooxEngine]FrooxEngine.Grabbable"
+    }
+  ]
+}
