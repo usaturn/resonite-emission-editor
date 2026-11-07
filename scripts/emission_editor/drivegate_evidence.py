@@ -494,18 +494,18 @@ def _sdk_graph(record, module):
             if not isinstance(ident, str) or not ident or ident in components:
                 raise ValueError("sdk-component-identity")
             members = {k: v["Data"] for k, v in raw.items() if isinstance(v, dict) and "Data" in v}
-            if "persistant-ID" in raw:
-                # Actual SDK 1.9 records use this distinct spelling. The current
-                # characterization only covers persistent-ID; do not guess a
-                # native alias or drop the identity to make incomplete data pass.
-                raise ValueError("missing:sdk-uncharacterized-persistant-ID")
-            if "persistent-ID" in raw:
-                # Characterized ComponentBase.Initialize sets persistent=true;
-                # its Sync<Boolean> field is NonPersistent, hence only its ID
-                # is saved. This is NOT a blanket native-default policy.
+            persistence_metadata = [key for key in ("persistant-ID", "persistent-ID") if key in raw]
+            if len(persistence_metadata) > 1:
+                raise ValueError("sdk-ambiguous-persistence-metadata")
+            if persistence_metadata:
+                # Exact SDK common BSON bookkeeping (including the previously
+                # characterized spelling), NOT an engine alias/member identity.
+                # Native PackResoniteLink uses NodeComponent.Fields/AddComponent,
+                # not this GUID; ComponentBase.Initialize independently sets the
+                # native Boolean persistent=true. No other defaults are inferred.
                 # Controller must recheck DLL/SDK fingerprints before execution.
-                persistent_id = raw["persistent-ID"]
-                if not isinstance(persistent_id, str) or not UUID(persistent_id).int:
+                metadata_id = raw[persistence_metadata[0]]
+                if not isinstance(metadata_id, str) or not UUID(metadata_id).int:
                     raise ValueError("sdk-persistent-field-identity")
                 members.setdefault("persistent", True)  # Explicit serialized value wins.
             if "persistent" in members and type(members["persistent"]) is not bool:
@@ -614,8 +614,9 @@ def compare_sdk_runtime(record: dict, actual_components: list[dict], *, module: 
 
     This compares the runtime graph, not deployment slot layout or ownership.
     Unknown/missing current members cannot pass; identified reference nulls use the CLI schema.
-    The characterized persistent-ID-only control expects Boolean true; explicit
-    serialized values win. Other extra native members are NOT ignored/defaulted.
+    Exact SDK persistence bookkeeping implies the independently characterized
+    native Boolean true, NOT a mapped GUID; explicit serialized values win.
+    Other extra native members are NOT ignored/defaulted.
     Parse JSON must separately be tied to a verified package's brson (this function cannot authenticate it).
     """
     issues = []

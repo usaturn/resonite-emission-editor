@@ -454,44 +454,36 @@ def test_slot_numeric_shapes_preserve_every_axis_and_int64_without_bool_coercion
                                   field("ResoniteLink.float3", {"x": True, "y": 0, "z": 0})).status == "failed"
 
 
-def test_sdk_persistent_metadata_is_checked_and_explicit_values_override_initializer():
-    # S: ignoring the nonserialized persistent control hides a native graph
-    # change; inventing true for an explicit false also loses package semantics.
+def test_sdk_common_metadata_keeps_native_persistent_control_and_explicit_values():
+    # S: dropping native persistent after accepting SDK bookkeeping hides a
+    # changed/missing control. Bookkeeping GUIDs are NOT deployed member IDs.
+    # Replacing an explicit false with the initializer also loses semantics.
     record, actual = sdk_record(), runtime_bool()
     children = record["Object"]["Children"][0]["Children"][0]["Children"]
     raw_components = children[0]["Components"]["Data"] + children[1]["Components"]["Data"]
     for i, (raw, observed) in enumerate(zip(raw_components, actual)):
-        raw["Data"]["persistent-ID"] = f"00000000-0000-0000-0000-{i+64:012x}"
+        raw["Data"]["persistant-ID"] = f"00000000-0000-0000-0000-{i+64:012x}"
         observed["members"]["persistent"] = field("System.Boolean", True, f"Reso_E{i}A")
     args = {"module": "BoolDrive", "id_map": {"node-value": "Reso_1", "node-drive": "Reso_2", "node-proxy": "Reso_3"},
             "private_bindings": {"Driven": "Reso_FF"}}
     assert evidence.compare_sdk_runtime(record, actual, **args).status == "passed"
+    # S: do not silently discard one of two ambiguous metadata identities.
+    ambiguous = deepcopy(record)
+    ambiguous_raw = ambiguous["Object"]["Children"][0]["Children"][0]["Children"][0]["Components"]["Data"][0]["Data"]
+    ambiguous_raw["persistent-ID"] = "00000000-0000-0000-0000-000000000099"
+    assert evidence.compare_sdk_runtime(ambiguous, actual, **args).status != "passed"
     actual[0]["members"]["persistent"]["value"] = False
     assert evidence.compare_sdk_runtime(record, actual, **args).status == "failed"
-    raw_components[0]["Data"]["persistent"] = {"ID": raw_components[0]["Data"]["persistent-ID"], "Data": False}
+    missing = deepcopy(actual)
+    del missing[0]["members"]["persistent"]
+    assert evidence.compare_sdk_runtime(record, missing, **args).status != "passed"
+    raw_components[0]["Data"]["persistent"] = {"ID": "explicit-field", "Data": False}
     assert evidence.compare_sdk_runtime(record, actual, **args).status == "passed"
     actual[0]["members"]["persistent"]["value"] = True
     assert evidence.compare_sdk_runtime(record, actual, **args).status == "failed"
-    del actual[0]["members"]["persistent"]
-    assert evidence.compare_sdk_runtime(record, actual, **args).status != "passed"
-
     raw_components[0]["Data"]["persistent"]["Data"] = 0
     actual[0]["members"]["persistent"] = field("System.Int32", 0, "Reso_E0A")
     assert evidence.compare_sdk_runtime(record, actual, **args).status != "passed"
-
-
-def test_uncharacterized_sdk_persistant_identity_cannot_be_silently_dropped():
-    # S: a foreign/unmapped saved field identity cannot disappear from a graph
-    # comparison just because the observation also omitted that native member.
-    record = sdk_record()
-    children = record["Object"]["Children"][0]["Children"][0]["Children"]
-    children[0]["Components"]["Data"][0]["Data"]["persistant-ID"] = "00000000-0000-0000-0000-000000000040"
-    result = evidence.compare_sdk_runtime(
-        record, runtime_bool(), module="BoolDrive",
-        id_map={"node-value": "Reso_1", "node-drive": "Reso_2", "node-proxy": "Reso_3"},
-        private_bindings={"Driven": "Reso_FF"},
-    )
-    assert result.status == "inconclusive"
 
 
 def test_known_empty_output_identity_is_preserved_through_nested_members():
