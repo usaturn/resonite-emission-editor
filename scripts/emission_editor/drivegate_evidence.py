@@ -56,10 +56,15 @@ def _value(typ, value):
         return type(value) is bool
     if typ == "System.Int32":
         return type(value) is int and -(2**31) <= value < 2**31
+    if typ == "System.Int64":
+        return type(value) is int and -(2**63) <= value < 2**63
     if typ in ("System.Single", "System.Double"):
         return _real(value)
     if typ == "System.String":
-        return isinstance(value, str)
+        return value is None or isinstance(value, str)
+    if typ in ("ResoniteLink.float3", "ResoniteLink.floatQ"):
+        axes = {"x", "y", "z", "w"} if typ.endswith("floatQ") else {"x", "y", "z"}
+        return isinstance(value, dict) and value.keys() == axes and all(_real(v) for v in value.values())
     if typ == "ResoniteLink.colorX":
         return (isinstance(value, dict) and set(value) == {"r", "g", "b", "a", "profile"}
                 and all(_real(value[k]) for k in ("r", "g", "b", "a"))
@@ -78,17 +83,54 @@ def _strict_equal(left, right):
     return left == right
 
 
-def compare_typed(expected: dict, actual: dict) -> Verdict:
-    """Compare a complete MemberValue (Core/Models.cs), including member ID.
+def _json_value(value):
+    if value is None or type(value) in (str, bool, int):
+        return True
+    if type(value) is float:
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_json_value(v) for v in value)
+    if isinstance(value, dict):
+        return all(type(k) is str and _json_value(v) for k, v in value.items())
+    return False
 
-    Only schema-real values permit int/float equivalence. Missing is unknown,
-    never false, zero, null or an empty list. Unknown field types stay unknown.
+
+def _compare_opaque(expected, actual):
+    # Preservation ONLY: exact complete JSON, not domain/writer authorization.
+    if not _json_value(expected) or not _json_value(actual):
+        return Verdict("inconclusive", ("missing:complete-json-payload",))
+    return Verdict("passed") if _strict_equal(expected, actual) else Verdict("failed", ("preserved-payload",))
+
+
+def compare_typed(expected: dict, actual: dict) -> Verdict:
+    """Semantic comparison of known complete MemberValue types, including ID.
+
+    Only schema-real values allow int/float equivalence. A PRESENT identified
+    field/reference may encode null by omitting value/targetId (CLI 0.2.0);
+    absent members/identity/type are unknown. Nonnullable null is never false/0.
+    Uninterpreted fields and SyncPlayback are NOT allowed private target types.
     """
+    return _compare_member(expected, actual, preservation=False)
+
+
+def _compare_member(expected: dict, actual: dict, *, preservation: bool) -> Verdict:
     if not isinstance(expected, dict) or not isinstance(actual, dict):
         return Verdict("inconclusive", ("missing:typed-member",))
+    # MapMember always emits a field object; OutputWriter omits its null Value.
+    # Normalize only present identified/typed fields, never a missing member.
+    def normalize(member):
+        if (member.get("kind") == "field" and isinstance(member.get("id"), str) and member["id"]
+                and isinstance(member.get("type"), str) and member["type"]):
+            return {"value": None, **member}
+        return member
+    expected, actual = normalize(expected), normalize(actual)
     required = {"kind", "id"}
     kind = expected.get("kind")
     if kind == "field":
+        required |= {"type", "value"}
+    elif kind == "empty" and preservation:
+        pass  # MapMember(Link.EmptyElement) emits only kind/id; preserve identity.
+    elif kind == "SyncPlayback" and preservation:
         required |= {"type", "value"}
     elif kind == "reference":
         # ResoLoop 0.2.0 maps every present reference; WhenWritingNull omits
@@ -110,15 +152,26 @@ def compare_typed(expected: dict, actual: dict) -> Verdict:
         return Verdict("inconclusive", ("missing:expected-member-id",))
     if expected.keys() != actual.keys():
         return Verdict("failed", ("member-field-set",))
-    skip = {"value"} if kind == "field" else {"members"} if kind in ("syncObject", "dictionary") else {"elements"} if kind == "list" else set()
+    skip = {"value"} if kind in ("field", "SyncPlayback") else {"members"} if kind in ("syncObject", "dictionary") else {"elements"} if kind == "list" else set()
     if any(not _strict_equal(v, actual[k]) for k, v in expected.items() if k not in skip):
         return Verdict("failed", ("member-identity-or-type",))
     if kind == "field":
         typ = expected["type"]
+        if not isinstance(typ, str) or not typ:
+            return Verdict("inconclusive", ("missing:field-type",))
+        known = typ in ("System.Boolean", "System.Int32", "System.Int64", "System.Single", "System.Double",
+                        "System.String", "ResoniteLink.colorX", "ResoniteLink.float3", "ResoniteLink.floatQ")
+        if preservation and not known:
+            return _compare_opaque(expected["value"], actual["value"])
         if not _value(typ, expected["value"]):
             return Verdict("inconclusive", ("missing:valid-supported-expectation",))
         if not _value(typ, actual["value"]) or expected["value"] != actual["value"]:
             return Verdict("failed", ("typed-value",))
+    elif kind == "SyncPlayback":
+        if (expected["type"] != "[FrooxEngine]FrooxEngine.SyncPlayback"
+                or not isinstance(expected["value"], dict) or not isinstance(actual["value"], dict)):
+            return Verdict("inconclusive", ("missing:complete-playback-payload",))
+        return _compare_opaque(expected["value"], actual["value"])
     elif kind in ("syncObject", "dictionary", "list"):
         key = "elements" if kind == "list" else "members"
         left, right = expected[key], actual[key]
@@ -130,7 +183,7 @@ def compare_typed(expected: dict, actual: dict) -> Verdict:
             if not isinstance(left, dict) or not isinstance(right, dict) or left.keys() != right.keys():
                 return Verdict("failed", ("member-map-coverage",))
             pairs = ((v, right[k]) for k, v in left.items())
-        results = [compare_typed(a, b) for a, b in pairs]
+        results = [_compare_member(a, b, preservation=preservation) for a, b in pairs]
         return _result([issue for result in results for issue in result.issues])
     return Verdict("passed")
 
@@ -244,6 +297,9 @@ def compare_subtree(expected: dict, actual: dict) -> Verdict:
     Both trees use SlotInfo/ComponentInfo shapes, with `members` on EVERY
     component. A hierarchy --summary alone is deliberately insufficient. The
     expected tree must be independently reviewed; never copy current into it.
+    Complete typed fields of uninterpreted types, known EmptyElement identities
+    and the SyncPlayback mapper payload are preserved as strict JSON, NOT semantically authorized as
+    private writer targets. Unknown kinds/incomplete recursive members cannot pass.
     """
     left, lc, li = _tree(expected)
     right, rc, ri = _tree(actual)
@@ -264,7 +320,7 @@ def compare_subtree(expected: dict, actual: dict) -> Verdict:
                 issues.append("missing:slot-member-coverage:" + ident)
             else:
                 for name, member in lm.items():
-                    issues.extend(compare_typed(member, rm[name]).issues)
+                    issues.extend(_compare_member(member, rm[name], preservation=True).issues)
     for ident, (comp, parent) in lc.items():
         other, other_parent = rc[ident]
         if parent != other_parent or not _strict_equal(
@@ -275,7 +331,7 @@ def compare_subtree(expected: dict, actual: dict) -> Verdict:
             issues.append("component-member-coverage:" + ident)
         else:
             for name, member in comp["members"].items():
-                result = compare_typed(member, other["members"][name])
+                result = _compare_member(member, other["members"][name], preservation=True)
                 issues.extend(result.issues)
     return _result(issues)
 
@@ -411,6 +467,7 @@ _RUNTIME_PREFIXES = ("[ProtoFluxBindings]", "[FrooxEngine]FrooxEngine.ProtoFlux.
 
 def _sdk_graph(record, module):
     import re
+    from uuid import UUID
     types = record["Types"]
     if not isinstance(types, list) or not all(isinstance(t, str) for t in types):
         raise ValueError("sdk-types")
@@ -437,6 +494,22 @@ def _sdk_graph(record, module):
             if not isinstance(ident, str) or not ident or ident in components:
                 raise ValueError("sdk-component-identity")
             members = {k: v["Data"] for k, v in raw.items() if isinstance(v, dict) and "Data" in v}
+            if "persistant-ID" in raw:
+                # Actual SDK 1.9 records use this distinct spelling. The current
+                # characterization only covers persistent-ID; do not guess a
+                # native alias or drop the identity to make incomplete data pass.
+                raise ValueError("missing:sdk-uncharacterized-persistant-ID")
+            if "persistent-ID" in raw:
+                # Characterized ComponentBase.Initialize sets persistent=true;
+                # its Sync<Boolean> field is NonPersistent, hence only its ID
+                # is saved. This is NOT a blanket native-default policy.
+                # Controller must recheck DLL/SDK fingerprints before execution.
+                persistent_id = raw["persistent-ID"]
+                if not isinstance(persistent_id, str) or not UUID(persistent_id).int:
+                    raise ValueError("sdk-persistent-field-identity")
+                members.setdefault("persistent", True)  # Explicit serialized value wins.
+            if "persistent" in members and type(members["persistent"]) is not bool:
+                raise ValueError("sdk-persistent-boolean")
             components[ident] = {"type": typ, "members": members, "slot": name}
             if "GlobalReference<" in typ or ("FieldDriveBase<" in typ and typ.endswith("+Proxy")):
                 prefix, port = name.split(":", 1)
@@ -541,9 +614,9 @@ def compare_sdk_runtime(record: dict, actual_components: list[dict], *, module: 
 
     This compares the runtime graph, not deployment slot layout or ownership.
     Unknown/missing current members cannot pass; identified reference nulls use the CLI schema.
-    Extra native default members need an independently reviewed baseline; they
-    are NOT silently ignored or inferred here. Parse JSON must separately be
-    tied to a verified package's brson (this function cannot authenticate it).
+    The characterized persistent-ID-only control expects Boolean true; explicit
+    serialized values win. Other extra native members are NOT ignored/defaulted.
+    Parse JSON must separately be tied to a verified package's brson (this function cannot authenticate it).
     """
     issues = []
     try:

@@ -86,7 +86,7 @@ def test_typed_comparison_retains_color_profile_alpha_and_bool_identity():
     assert expected["value"]["profile"] == "Linear"  # Negative fixture owns its dict.
     assert compare(field("System.Boolean", True), field("System.Boolean", 1)).status == "failed"
     assert compare(field("System.Int32", 1), field("System.Int32", True)).status == "failed"
-    assert compare(field("System.Boolean", False), {"id": "Reso_F0", "kind": "field", "type": "System.Boolean"}).status == "inconclusive"
+    assert compare(field("System.Boolean", False), {"id": "Reso_F0", "kind": "field", "type": "System.Boolean"}).status == "failed"
     assert compare(field("System.Boolean", False), field("System.Boolean", None)).status == "failed"
 
 
@@ -385,3 +385,129 @@ def test_slot_member_projection_cannot_hide_unknown_values_as_metadata():
     del expected["members"]["IsActive"]["value"]
     del actual["members"]["IsActive"]["value"]
     assert evidence.compare_subtree(expected, actual).status == "inconclusive"
+
+
+def test_present_nullable_string_is_not_missing_or_empty():
+    # S: treating omitted null as empty hides a changed slot Tag; an absent
+    # member must not be invented from the serializer's omission policy.
+    expected = field("System.String", None, "Reso_E2")
+    omitted = {"id": "Reso_E2", "kind": "field", "type": "System.String"}
+    assert evidence.compare_typed(expected, omitted).status == "passed"
+    assert evidence.compare_typed(expected, field("System.String", "", "Reso_E2")).status == "failed"
+    assert evidence.compare_typed(expected, {}).status == "inconclusive"
+    actual = deepcopy(omitted)
+    del actual["type"]
+    assert evidence.compare_typed(expected, actual).status == "inconclusive"
+    before, after = subtree(), subtree()
+    before["members"] = {"Tag": expected}
+    after["members"] = {"Tag": omitted}
+    assert evidence.compare_subtree(before, after).status == "passed"
+    del after["members"]["Tag"]
+    assert evidence.compare_subtree(before, after).status != "passed"
+
+
+def test_protected_opaque_payloads_are_preserved_not_authorized_private_types():
+    # S: filtering uninterpreted types or nested playback values silently loses
+    # protected data. Globally allowing them would widen private writer checks.
+    before, after = subtree(), subtree()
+    members = {
+        "Type": field("System.Type", {"name": "型", "args": [None, True, 1]}, "Reso_E3"),
+        "Playback": {"kind": "SyncPlayback", "id": "Reso_E4",
+                     "type": "[FrooxEngine]FrooxEngine.SyncPlayback",
+                     "value": {"loop": True, "position": 1.25, "nested": [None, {"speed": 2}]}},
+        "Enum": field("Engine.Mode", "First", "Reso_E5"),
+        "Pair": field("ResoniteLink.float2", {"x": 1, "y": .5}, "Reso_E6"),
+    }
+    before["children"][0]["components"][0]["members"].update(deepcopy(members))
+    after["children"][0]["components"][0]["members"].update(deepcopy(members))
+    assert evidence.compare_subtree(before, after).status == "passed"
+    assert evidence.compare_typed(members["Type"], deepcopy(members["Type"])).status == "inconclusive"
+    actual = after["children"][0]["components"][0]["members"]
+    actual["Playback"]["value"]["nested"][1]["speed"] = 3
+    assert evidence.compare_subtree(before, after).status == "failed"
+    actual["Playback"] = deepcopy(members["Playback"])
+    actual["Type"]["value"]["args"][1] = 1  # bool must not coerce even inside opaque JSON.
+    assert evidence.compare_subtree(before, after).status == "failed"
+    actual["Type"] = deepcopy(members["Type"])
+    del actual["Pair"]["type"]
+    assert evidence.compare_subtree(before, after).status != "passed"
+    actual["Pair"] = {"kind": "unrecognized", "id": "Reso_E6", "value": 1}
+    before["children"][0]["components"][0]["members"]["Pair"] = deepcopy(actual["Pair"])
+    assert evidence.compare_subtree(before, after).status == "inconclusive"
+
+
+def test_slot_numeric_shapes_preserve_every_axis_and_int64_without_bool_coercion():
+    # S: dropping quaternion w, coercing bool or rounding a large OrderOffset
+    # can report a changed protected slot as unchanged.
+    before, after = subtree(), subtree()
+    members = {"Position": field("ResoniteLink.float3", {"x": 1, "y": .25, "z": -3}, "Reso_E7"),
+               "Rotation": field("ResoniteLink.floatQ", {"x": 0, "y": .5, "z": 0, "w": .75}, "Reso_E8"),
+               "OrderOffset": field("System.Int64", 2**60 + 1, "Reso_E9")}
+    before["members"], after["members"] = deepcopy(members), deepcopy(members)
+    assert evidence.compare_subtree(before, after).status == "passed"
+    after["members"]["Rotation"]["value"]["w"] = .5
+    assert evidence.compare_subtree(before, after).status == "failed"
+    after["members"] = deepcopy(members)
+    after["members"]["OrderOffset"]["value"] = 2**60
+    assert evidence.compare_subtree(before, after).status == "failed"
+    assert evidence.compare_typed(field("ResoniteLink.float3", {"x": 1, "y": 0, "z": 0}),
+                                  field("ResoniteLink.float3", {"x": True, "y": 0, "z": 0})).status == "failed"
+
+
+def test_sdk_persistent_metadata_is_checked_and_explicit_values_override_initializer():
+    # S: ignoring the nonserialized persistent control hides a native graph
+    # change; inventing true for an explicit false also loses package semantics.
+    record, actual = sdk_record(), runtime_bool()
+    children = record["Object"]["Children"][0]["Children"][0]["Children"]
+    raw_components = children[0]["Components"]["Data"] + children[1]["Components"]["Data"]
+    for i, (raw, observed) in enumerate(zip(raw_components, actual)):
+        raw["Data"]["persistent-ID"] = f"00000000-0000-0000-0000-{i+64:012x}"
+        observed["members"]["persistent"] = field("System.Boolean", True, f"Reso_E{i}A")
+    args = {"module": "BoolDrive", "id_map": {"node-value": "Reso_1", "node-drive": "Reso_2", "node-proxy": "Reso_3"},
+            "private_bindings": {"Driven": "Reso_FF"}}
+    assert evidence.compare_sdk_runtime(record, actual, **args).status == "passed"
+    actual[0]["members"]["persistent"]["value"] = False
+    assert evidence.compare_sdk_runtime(record, actual, **args).status == "failed"
+    raw_components[0]["Data"]["persistent"] = {"ID": raw_components[0]["Data"]["persistent-ID"], "Data": False}
+    assert evidence.compare_sdk_runtime(record, actual, **args).status == "passed"
+    actual[0]["members"]["persistent"]["value"] = True
+    assert evidence.compare_sdk_runtime(record, actual, **args).status == "failed"
+    del actual[0]["members"]["persistent"]
+    assert evidence.compare_sdk_runtime(record, actual, **args).status != "passed"
+
+    raw_components[0]["Data"]["persistent"]["Data"] = 0
+    actual[0]["members"]["persistent"] = field("System.Int32", 0, "Reso_E0A")
+    assert evidence.compare_sdk_runtime(record, actual, **args).status != "passed"
+
+
+def test_uncharacterized_sdk_persistant_identity_cannot_be_silently_dropped():
+    # S: a foreign/unmapped saved field identity cannot disappear from a graph
+    # comparison just because the observation also omitted that native member.
+    record = sdk_record()
+    children = record["Object"]["Children"][0]["Children"][0]["Children"]
+    children[0]["Components"]["Data"][0]["Data"]["persistant-ID"] = "00000000-0000-0000-0000-000000000040"
+    result = evidence.compare_sdk_runtime(
+        record, runtime_bool(), module="BoolDrive",
+        id_map={"node-value": "Reso_1", "node-drive": "Reso_2", "node-proxy": "Reso_3"},
+        private_bindings={"Driven": "Reso_FF"},
+    )
+    assert result.status == "inconclusive"
+
+
+def test_known_empty_output_identity_is_preserved_through_nested_members():
+    # S: an identity-only mapped EmptyElement is observed, not missing; ignoring
+    # it would hide a rewired output. This does not authorize an empty writer.
+    expected, actual = subtree(), subtree()
+    outputs = {"kind": "list", "id": "Reso_EB", "elements": [
+        {"kind": "syncObject", "id": "Reso_EC", "members": {
+            "Source": {"kind": "empty", "id": "Reso_ED"}}}]}
+    expected["members"] = {"Outputs": deepcopy(outputs)}
+    actual["members"] = {"Outputs": deepcopy(outputs)}
+    assert evidence.compare_subtree(expected, actual).status == "passed"
+    member = actual["members"]["Outputs"]["elements"][0]["members"]["Source"]
+    member["id"] = "Reso_EE"
+    assert evidence.compare_subtree(expected, actual).status == "failed"
+    del member["id"]
+    assert evidence.compare_subtree(expected, actual).status == "inconclusive"
+    assert evidence.compare_typed({"kind": "empty", "id": "Reso_ED"},
+                                  {"kind": "empty", "id": "Reso_ED"}).status == "inconclusive"
