@@ -66,6 +66,27 @@ def test_raw_capture_pins_target_preserves_bytes_and_never_grants_permission(fak
                for name in ("receipt.json", "stdout.bin", "stderr.bin"))
 
 
+def test_discover_url_is_bound_to_the_captured_invocation(fake_cli, tmp_path):
+    # S: omitting discovery's URL permits a saved request to be silently relabelled.
+    _, _, log = fake_cli
+    output = tmp_path / "discovery"
+    result = collect_read(ReadRequest("discover", "ws://localhost:16070"), output, cwd=tmp_path)
+    assert result["transportSucceeded"] is True
+    assert result["complete"] is False and result["executionPermission"] is False
+    assert load_read(output) == result
+    args = json.loads(log.read_text())
+    assert args[0] == "discover"
+    assert "--url" in args
+    assert args[args.index("--url") + 1] == "ws://localhost:16070"
+
+    path = output / "receipt.json"
+    receipt = json.loads(path.read_text())
+    receipt["request"]["url"] = "ws://localhost:16071"
+    path.write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="read-receipt-argv-mismatch"):
+        load_read(output)
+
+
 @pytest.mark.parametrize("bad", [
     ReadRequest("component-set", "ws://localhost:16070", "Reso_AB"),
     ReadRequest("component-inspect", "ws://localhost:16070", "--yes"),

@@ -64,10 +64,8 @@ class ReadRequest:
                 args = ["component", "inspect", self.target]
         else:
             raise ValueError("read-operation-not-allowed")
-        # Discovery only listens to announcements; it does not select/connect to
-        # a session. Every connected operation has an explicit destination.
-        if self.operation != "discover":
-            args += ["--url", self.url]
+        # Discovery is UDP-only, but its declared URL must still be bound to argv.
+        args += ["--url", self.url]
         return ["resoloop", *args, "--timeout", "10", "--command-timeout", "30", "--json"]
 
 
