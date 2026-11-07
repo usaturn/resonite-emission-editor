@@ -91,6 +91,12 @@ def compare_typed(expected: dict, actual: dict) -> Verdict:
     if kind == "field":
         required |= {"type", "value"}
     elif kind == "reference":
+        # ResoLoop 0.2.0 maps every present reference; WhenWritingNull omits
+        # targetId for a known null. Never normalize an absent/unidentified member.
+        if all(m.get("kind") == "reference" and isinstance(m.get("id"), str) and m["id"]
+               for m in (expected, actual)):
+            expected = {"targetId": None, **expected}
+            actual = {"targetId": None, **actual}
         required |= {"targetId"}
     elif kind in ("syncObject", "dictionary"):
         required |= {"members"}
@@ -248,10 +254,17 @@ def compare_subtree(expected: dict, actual: dict) -> Verdict:
         return Verdict("failed", ("subtree-coverage",))
     for ident, (node, parent) in left.items():
         other, other_parent = right[ident]
-        meta = {k: v for k, v in node.items() if k not in ("children", "components")}
-        ometa = {k: v for k, v in other.items() if k not in ("children", "components")}
+        meta = {k: v for k, v in node.items() if k not in ("children", "components", "members")}
+        ometa = {k: v for k, v in other.items() if k not in ("children", "components", "members")}
         if parent != other_parent or not _strict_equal(meta, ometa):
             issues.append("slot-identity-or-metadata:" + ident)
+        if "members" in node or "members" in other:
+            lm, rm = node.get("members"), other.get("members")
+            if not isinstance(lm, dict) or not isinstance(rm, dict) or lm.keys() != rm.keys():
+                issues.append("missing:slot-member-coverage:" + ident)
+            else:
+                for name, member in lm.items():
+                    issues.extend(compare_typed(member, rm[name]).issues)
     for ident, (comp, parent) in lc.items():
         other, other_parent = rc[ident]
         if parent != other_parent or not _strict_equal(
@@ -527,7 +540,7 @@ def compare_sdk_runtime(record: dict, actual_components: list[dict], *, module: 
     by type, not by confusing the envelope's name with the deployed module.
 
     This compares the runtime graph, not deployment slot layout or ownership.
-    Unknown/missing current members (including omitted null targets) cannot pass.
+    Unknown/missing current members cannot pass; identified reference nulls use the CLI schema.
     Extra native default members need an independently reviewed baseline; they
     are NOT silently ignored or inferred here. Parse JSON must separately be
     tied to a verified package's brson (this function cannot authenticate it).
@@ -558,9 +571,9 @@ def compare_sdk_runtime(record: dict, actual_components: list[dict], *, module: 
             used_member_ids.add(member["id"])
             if external_target is not None or raw is None or (isinstance(raw, str) and raw in graph):
                 target = external_target if external_target is not None else id_map[raw] if raw is not None else None
-                if member.get("kind") != "reference" or "targetId" not in member:
+                if member.get("kind") != "reference":
                     issues.append("missing:sdk-reference")
-                elif member["targetId"] != target:
+                elif member.get("targetId") != target:
                     issues.append("sdk-reference-target")
             elif isinstance(raw, list):
                 if member.get("kind") != "list" or not isinstance(member.get("elements"), list):

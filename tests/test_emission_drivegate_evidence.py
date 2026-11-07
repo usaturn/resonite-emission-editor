@@ -362,3 +362,26 @@ def test_observation_rejects_response_for_another_target(tmp_path):
     # S: success for the requested argv must not vouch for a different response ID.
     before, reads, after = observation(tmp_path, value={"id": "Reso_CC", "members": {}})
     assert evidence.load_observation(before, reads, after, window=window(), identity=identity()).status == "failed"
+
+
+def test_reference_null_is_known_only_for_a_present_identified_reference():
+    # S: normalizing an absent member as null could authorize a disconnected writer.
+    expected = {"kind": "reference", "id": "Reso_F1", "targetId": None,
+                "targetType": "INodeOperation"}
+    omitted = {"kind": "reference", "id": "Reso_F1", "targetType": "INodeOperation"}
+    assert evidence.compare_typed(expected, omitted).status == "passed"
+    assert evidence.compare_typed(expected, {}).status == "inconclusive"
+    assert evidence.compare_typed(expected, {"kind": "reference"}).status == "inconclusive"
+    connected = expected | {"targetId": "Reso_F2"}
+    assert evidence.compare_typed(connected, omitted).status == "failed"
+
+
+def test_slot_member_projection_cannot_hide_unknown_values_as_metadata():
+    # S: identical incomplete slot-member projections do not establish protection.
+    expected, actual = subtree(), subtree()
+    expected["members"] = {"IsActive": field("System.Boolean", True, "Reso_E1")}
+    actual["members"] = {"IsActive": field("System.Boolean", True, "Reso_E1")}
+    assert evidence.compare_subtree(expected, actual).status == "passed"
+    del expected["members"]["IsActive"]["value"]
+    del actual["members"]["IsActive"]["value"]
+    assert evidence.compare_subtree(expected, actual).status == "inconclusive"
