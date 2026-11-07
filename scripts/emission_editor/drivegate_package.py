@@ -2,12 +2,13 @@
 
 A seal detects accidental corruption, not an adversary rewriting both the seal
 and its checksum. It never constitutes native success or permission to execute.
-Runtime state paths are reserved, initially absent, and never reused by prepare.
+Runtime paths belong to a separate, initially fresh execution area, never the seal.
 """
 import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 
 
@@ -22,7 +23,7 @@ FIELDS = {
     "ColorAfter": ("colorX", [0.0, 0.0, 0.0, 1.0]), "BoolAfter": ("bool", False),
     "Done": ("int", 0),
 }
-FORMAT = "emission-drivegate-package-v1"
+FORMAT = "emission-drivegate-package-v2"
 
 
 def fixture_declaration(token: str) -> dict:
@@ -117,24 +118,41 @@ def _offline(root: Path, label: str, args: list[str], *, compiler=False) -> dict
         raise ValueError("offline-invalid-response") from exc
 
 
+def _code_commit() -> str:
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT,
+                            capture_output=True, check=True).stdout.decode().strip()
+    status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=normal"],
+                            cwd=REPO_ROOT, capture_output=True, check=True)
+    if status.stdout:
+        raise ValueError("drivegate-dirty-code-checkout")
+    return commit
+
+
+def _output_path(path: Path, source_root: Path) -> Path:
+    path = Path(path).absolute()
+    _no_links(path)
+    path = path.resolve()
+    if path.is_relative_to(source_root) or source_root.is_relative_to(path):
+        raise ValueError("drivegate-output-overlaps-source")
+    if path.is_relative_to(REPO_ROOT):
+        raise ValueError("drivegate-output-inside-checkout")
+    if path.exists():
+        raise FileExistsError(path)
+    return path
+
+
 def prepare_package(destination: Path, token: str, *, library_path: Path) -> dict:
     """Compile/validate new isolated copies and seal only after every exit is zero.
 
-    Failure leaves diagnostic files but no seal; no overwrite, retry, deploy,
-    execution copy, live call, or state adoption is performed here.
+    Also reserve a fresh sibling <destination>-execution containing deploy inputs.
+    Failure leaves diagnostics but no seal; no retry, deploy or live call occurs.
     """
     fixture = fixture_declaration(token)
-    destination = Path(destination).absolute()
-    _no_links(destination)
-    destination = destination.resolve()
     source_root = Path(SOURCE_ROOT).absolute()
     _no_links(source_root)
     source_root = source_root.resolve()
-    if destination.is_relative_to(source_root) or source_root.is_relative_to(destination):
-        raise ValueError("drivegate-output-overlaps-source")
-    # Do not allow other authoring files in this checkout to become build outputs.
-    if destination.is_relative_to(REPO_ROOT):
-        raise ValueError("drivegate-output-inside-checkout")
+    destination = _output_path(destination, source_root)
+    execution = _output_path(destination.with_name(destination.name + "-execution"), source_root)
     for name in MODULES.values():
         source = source_root / (name + ".pg")
         _no_links(source)
@@ -146,12 +164,12 @@ def prepare_package(destination: Path, token: str, *, library_path: Path) -> dic
     dlls = {p.name: _hash(p) for p in sorted(library_path.glob("*.dll")) if p.is_file()}
     if not dlls:
         raise ValueError("drivegate-library-empty")
+    commit = _code_commit()
     destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+    execution.mkdir(mode=0o700, exist_ok=False)
     root = destination.resolve()
     for directory in ("sources", "manifests", "logs"):
         (root / directory).mkdir()
-    for role in MODULES:
-        (root / "runtime" / role).mkdir(parents=True)
     _json_new(root / "fixture.json", fixture)
     original = {name: (source_root / (name + ".pg")).read_bytes() for name in MODULES.values()}
     for name, content in original.items():
@@ -171,25 +189,33 @@ def prepare_package(destination: Path, token: str, *, library_path: Path) -> dic
             raise ValueError("drivegate-record-missing")
         if path.read_bytes() != original[name] or (source_root / path.name).read_bytes() != original[name]:
             raise ValueError("drivegate-source-changed")
-    for role, manifest in _manifests(root).items():
+    shutil.copytree(root / "sources", execution / "sources")
+    shutil.copyfile(root / "fixture.json", execution / "fixture.json")
+    (execution / "manifests").mkdir()
+    for role in MODULES:
+        (execution / "runtime" / role).mkdir(parents=True)
+    for role, manifest in _manifests(execution).items():
         path = root / "manifests" / (role + ".json")
         _json_new(path, manifest)
+        _json_new(execution / "manifests" / (role + ".json"), manifest)
         validation = _offline(root, role + "-manifest", ["flux", "validate-manifest", str(path)])
         if validation.get("valid") is not True:
             raise ValueError("drivegate-manifest-validation-failed")
         if any(Path(manifest[k]).exists() for k in ("worldState", "deployState")):
             raise ValueError("drivegate-runtime-state-exists")
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, check=True).stdout.decode().strip()
+    if _code_commit() != commit:
+        raise ValueError("drivegate-code-commit-changed")
     seal = {
-        "format": FORMAT, "token": token, "codeCommit": commit,
+        "format": FORMAT, "token": token, "codeCommit": commit, "executionRoot": str(execution),
         "cliVersion": cli["version"], "sdkVersion": sdk["version"], "dllSha256": dlls,
         "complete": False, "executionPermission": False, "nativeSucceeded": False,
         "files": _files(root),
     }
+    _verify_execution_files(execution, seal["files"])
     _json_new(root / "seal.json", seal)
     with (root / "seal.sha256").open("x") as stream:
         stream.write(_hash(root / "seal.json") + "\n")
-    return verify_package(root)
+    return verify_execution(root, execution)
 
 
 def verify_package(path: Path) -> dict:
@@ -216,14 +242,40 @@ def verify_package(path: Path) -> dict:
             raise ValueError("drivegate-seal-invalid")
         if json.loads((root / "fixture.json").read_bytes()) != fixture_declaration(seal["token"]):
             raise ValueError("drivegate-fixture-changed")
-        for role, manifest in _manifests(root.resolve()).items():
+        execution = Path(seal["executionRoot"])
+        if (not execution.is_absolute() or execution != execution.resolve()
+                or execution.is_relative_to(root) or root.is_relative_to(execution)):
+            raise ValueError("drivegate-execution-overlaps-seal")
+        for role, manifest in _manifests(execution).items():
             if json.loads((root / "manifests" / (role + ".json")).read_bytes()) != manifest:
                 raise ValueError("drivegate-manifest-changed")
-            if any(Path(manifest[k]).exists() for k in ("worldState", "deployState")):
-                raise ValueError("drivegate-runtime-state-exists")
         for name in MODULES.values():
             if not {"sources/" + name + suffix for suffix in (".pg", ".pg.brson")} <= inventory.keys():
                 raise ValueError("drivegate-required-artifact-missing")
         return seal
     except (KeyError, TypeError, json.JSONDecodeError, FileNotFoundError) as exc:
         raise ValueError("drivegate-package-invalid") from exc
+
+
+def _verify_execution_files(execution: Path, inventory: dict):
+    expected = {name: digest for name, digest in inventory.items()
+                if name == "fixture.json" or name.startswith(("sources/", "manifests/"))}
+    if _files(execution) != expected:
+        raise ValueError("drivegate-execution-file-set-or-hash-changed")
+
+
+def verify_execution(package_path: Path, execution_path: Path) -> dict:
+    """Compare a fresh execution area to sealed expectations, never grant permission.
+
+    Call immediately before handing its manifests to any separately authorized
+    consumer. Rebuilt records must still match; state/unknown files are rejected.
+    This is not a runtime receipt verifier or a concurrent-writer lock.
+    """
+    seal = verify_package(package_path)
+    execution = Path(execution_path).absolute()
+    _no_links(execution)
+    execution = execution.resolve()
+    if str(execution) != seal["executionRoot"]:
+        raise ValueError("drivegate-wrong-execution-area")
+    _verify_execution_files(execution, seal["files"])
+    return seal

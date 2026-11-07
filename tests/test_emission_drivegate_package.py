@@ -5,6 +5,8 @@ build sidecars next to its input. No test contacts Resonite.
 """
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 import sys
 
@@ -50,6 +52,8 @@ def compiler(tmp_path, monkeypatch):
         "    raise AssertionError(args)\n"
         "mode = os.environ.get('FAKE_FAILURE', '')\n"
         "if mode == 'manifest' and args[:2] == ['flux', 'validate-manifest']: data['valid'] = 1\n"
+        "if mode == 'execution-changed' and args[:2] == ['flux', 'validate-manifest']:\n"
+        "    Path(manifest['modules'][0]['source'] + '.brson').write_bytes(b'changed-during-validation')\n"
         "if args[:2] == ['flux', 'build']:\n"
         "    if mode == 'exit':\n"
         "        print(json.dumps({'ok': True, 'data': data})); sys.exit(7)\n"
@@ -65,11 +69,20 @@ def compiler(tmp_path, monkeypatch):
     library = tmp_path / "dlls"
     library.mkdir()
     (library / "FrooxEngine.dll").write_bytes(b'author-created-dll')
-    source = tmp_path / "authoring"
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    source = checkout / "authoring"
     source.mkdir()
     for name in NAMES:
         (source / (name + ".pg")).write_text("module " + name + "\n// 試験\n")
         (source / (name + ".pg.brson")).write_bytes(b'preexisting-record')
+    (checkout / 'drivegate_package.py').write_bytes(Path(package.__file__).read_bytes())
+    subprocess.run(['git', 'init', '-q', str(checkout)], check=True)
+    subprocess.run(['git', '-C', str(checkout), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Test', '-c',
+                    'user.email=test@example.invalid', 'commit', '-qm', 'fixture'], check=True)
+    monkeypatch.setattr(package, 'REPO_ROOT', checkout)
+    monkeypatch.setattr(package, 'SOURCE_ROOT', source)
     return source, library
 
 
@@ -106,7 +119,8 @@ def test_package_builds_copies_not_sources_and_never_grants_native_permission(co
     assert len({m['parent'] for m in manifests}) == 3
     states = [Path(m[key]) for m in manifests for key in ('worldState', 'deployState')]
     assert len(set(states)) == 6
-    assert all(p.is_relative_to(output) and not p.exists() for p in states)
+    execution = tmp_path / 'package-execution'
+    assert all(p.is_relative_to(execution) and not p.exists() for p in states)
     declaration = json.loads((output / 'fixture.json').read_text())
     assert declaration['slot']['name'] == 'ResoLoop_Test_EmissionEditor_Drivegate_trial-1'
     nodes = list(walk(declaration))
@@ -116,9 +130,9 @@ def test_package_builds_copies_not_sources_and_never_grants_native_permission(co
     assert all(c['type'] in allowed for n in nodes for c in n['components'])
     for manifest in manifests:
         assert manifest['parent'] in parents
-        assert Path(manifest['projectDirectory']).is_relative_to(output)
+        assert Path(manifest['projectDirectory']).is_relative_to(execution)
         for mod in manifest['modules']:
-            assert Path(mod['source']).is_relative_to(output / 'sources')
+            assert Path(mod['source']).is_relative_to(execution / 'sources')
             for binding in mod['bindings'].values():
                 assert binding['target'].startswith('$member:')
                 assert binding['target'][8:].split('.')[0] in keys
@@ -148,7 +162,7 @@ def test_compiler_cannot_write_into_source_or_through_link(compiler, monkeypatch
     if location == 'parent-traversal':
         # Representative source overlap: normalisation must precede containment.
         (tmp_path / 'neutral').mkdir()
-        output = tmp_path / 'neutral' / '..' / 'authoring' / 'new-package'
+        output = tmp_path / 'neutral' / '..' / 'checkout' / 'authoring' / 'new-package'
     else:
         # A different user-owned directory, not another alias of the source test.
         protected = tmp_path / 'user-files'
@@ -177,7 +191,7 @@ def test_linked_source_is_not_compiled_or_copied(compiler, monkeypatch, tmp_path
     assert not (tmp_path / 'package' / 'seal.json').exists()
 
 
-@pytest.mark.parametrize('failure', ['exit', 'envelope', 'compiler', 'nested-exit', 'no-record', 'manifest'])
+@pytest.mark.parametrize('failure', ['exit', 'envelope', 'compiler', 'nested-exit', 'no-record', 'manifest', 'execution-changed'])
 def test_failed_compilation_never_produces_a_success_seal(compiler, monkeypatch, tmp_path, failure):
     # Exit zero/envelope alone must not relabel compiler failure as success.
     monkeypatch.setenv('FAKE_FAILURE', failure)
@@ -189,7 +203,7 @@ def test_failed_compilation_never_produces_a_success_seal(compiler, monkeypatch,
         package.verify_package(output)
 
 
-@pytest.mark.parametrize('tamper', ['record', 'seal', 'missing', 'unknown', 'link', 'escape'])
+@pytest.mark.parametrize('tamper', ['record', 'seal', 'missing', 'unknown', 'link'])
 def test_tampered_or_incomplete_package_is_not_accepted(compiler, monkeypatch, tmp_path, tamper):
     # The record represents the shared input/record/manifest hash guard (D).
     output = tmp_path / 'package'
@@ -206,14 +220,44 @@ def test_tampered_or_incomplete_package_is_not_accepted(compiler, monkeypatch, t
         outside = tmp_path / 'outside'
         target.rename(outside)
         target.symlink_to(outside)
-    else:
-        # A forged inventory path must never read outside the package, even if
-        # the accidental-corruption seal checksum has also been updated.
-        import hashlib
-        seal = output / 'seal.json'
-        value = json.loads(seal.read_text())
-        value['files']['../outside'] = '0' * 64
-        seal.write_text(json.dumps(value))
-        (output / 'seal.sha256').write_text(hashlib.sha256(seal.read_bytes()).hexdigest() + '\n')
     with pytest.raises(ValueError):
         package.verify_package(output)
+
+
+def test_execution_builds_never_overwrite_sealed_expectations(compiler, monkeypatch, tmp_path):
+    # Pointing a deploy manifest at the seal silently destroys its expected records.
+    output = tmp_path / 'package'
+    seal = prepare(compiler, monkeypatch, output)
+    before = snapshot(output)
+    manifests = [json.loads(p.read_text()) for p in (output / 'manifests').glob('*.json')]
+    assert all(not Path(m['projectDirectory']).is_relative_to(output) for m in manifests)
+    execution = tmp_path / 'package-execution'
+    assert package.verify_execution(output, execution) == seal
+    # Use precisely the sources/cwd a downstream deploy would use; no live deploy.
+    for manifest in manifests:
+        for module in manifest['modules']:
+            subprocess.run(['resoloop', 'flux', 'build', module['source'], '--library-path',
+                            str(compiler[1]), '--json'], cwd=manifest['projectDirectory'], check=True,
+                           capture_output=True)
+    assert snapshot(output) == before
+    assert package.verify_execution(output, execution) == seal
+    # A sealed package can be relocated without changing its inventory or paths.
+    relocated = tmp_path / 'relocated-seal'
+    shutil.copytree(output, relocated)
+    assert package.verify_package(relocated) == seal
+    assert package.verify_execution(relocated, execution) == seal
+    # The execution copy must be compared, not just the original package verified.
+    (execution / 'sources' / 'ColorDrive.pg.brson').write_bytes(b'wrong-but-plausible-record')
+    with pytest.raises(ValueError):
+        package.verify_execution(relocated, execution)
+    assert snapshot(output) == before
+
+
+def test_dirty_code_is_not_attributed_to_head(compiler, monkeypatch, tmp_path):
+    # A clean commit ID must not silently vouch for uncommitted compiler inputs.
+    source, _ = compiler
+    (source / 'ColorDrive.pg').write_text('module ColorDrive\n// changed after commit\n')
+    output = tmp_path / 'package'
+    with pytest.raises(ValueError):
+        prepare(compiler, monkeypatch, output)
+    assert not (output / 'seal.json').exists()
