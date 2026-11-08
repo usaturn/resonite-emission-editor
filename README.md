@@ -4,6 +4,28 @@ Resonite のアバター EmissionColor を編集するツールの、実験中�
 
 このパッケージはオフラインの検査と、明示した project context での宣言生成までです。live の inspect / register / unregister は無効です。実機への切替は別の計画と許可が要ります。
 
+## Issue #3: 最小実用版の作業範囲
+
+利用者が簡略Spec/Plan（文書commit `19870487`）のA案を選択しました。登録後はPC補助なしの単独パネルを維持し、まず1人での一覧選択・RGBライブ編集・元に戻す・キャンセル・OKを実機で確認します。専用Drivegate/fullpreflight/全native・全DLLの証明、旧全手順、工程別モデルレビューは本体の着手・完了条件にしません。以下の厳密な検証APIは履歴と任意の補助機能として残しますが、完成させるための追加開発は行いません。未実施の機能を検証済みとは報告しません。
+
+### 新しい試験用パネルを作る
+
+コードcheckoutで、まだ存在しないcheckout外の出力先を指定します。
+
+```bash
+uv run python -m scripts.emission_editor.slim_demo prepare \
+  --url ws://localhost:<port> --library-path /absolute/current-managed-data \
+  --directory /absolute/new-demo-directory
+uv run python -m scripts.emission_editor.slim_demo observe \
+  --directory /absolute/new-demo-directory
+```
+
+`prepare`は新しい試験用材質・共有メッシュ2個と、別所有の1行パネルだけを作ります。既存アバター/保存済みパネルには書き込みません。既存UIとnativeのRowPreview/RowCommand/Commitを配備し、起動後はPC処理なしで編集できます。公開の汎用register入口は引き続き無効です。`observe`はこのパネルと試験材質の読み取りだけです。
+
+パネルの「編集を開始」→試験用対象を選択→RGB入力でライブ反映、「元に戻す」で編集継続、「キャンセル」で復元して終了、「OK」で変更を確定します。操作・見た目の確認はCLIの配備成功とは別です。保存/終了前にはOKかキャンセルを押してください。
+
+途中で失敗した場合は出力先を消して再実行せず、callsの実終了コードとstdout/stderr、作成されたpanel/fixtureのstateから適用状況を確認します。無条件の再送・自動rollbackは行いません。
+
 元機能の設計・実装計画は `docs/superpowers/` にあります。Issue #3の現在の作業・検証方針は、create-reso-worldの`docs/superpowers/specs/2026-11-07-emission-issue-3-native-gate-design.md`と対応Planに定義します。
 
 ## 開発
