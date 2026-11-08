@@ -177,7 +177,7 @@ def run_command(*, package: Path, execution: Path, baseline: NativeDeployedStage
         pending = _unresolved(journal)
         if pending:
             return finish("source-investigation", "unknown", unresolvedProcess=pending)
-        attempts, repeated, observations = 0, 0, 0
+        attempts, unconfirmed, observations = 0, 0, 0
         while True:
             observations += 1
             capture_started = datetime.now(UTC)
@@ -199,15 +199,19 @@ def run_command(*, package: Path, execution: Path, baseline: NativeDeployedStage
             except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
                 application, signature = "unknown", type(exc).__name__ + ":" + str(exc)
                 _new(run / f"observation-{observations}-error.json", {"error": signature})
-            # Reobserve partial/unknown without writing. Count *all* unproductive
-            # observations, not only consecutive matching failure signatures.
-            repeated += 1
-            if repeated > 2 or (application != "unapplied" and repeated >= 2):
-                return finish("source-investigation", application, signature=signature,
-                              observations=observations, attempts=attempts)
+            # Read recovery is separate from confirmed-unapplied write retries:
+            # even the first failed read AFTER a write gets another observation.
             if application != "unapplied":
+                unconfirmed += 1
+                if unconfirmed >= 2:
+                    return finish("source-investigation", application, signature=signature,
+                                  observations=observations, attempts=attempts)
                 time.sleep(backoff_seconds)
                 continue
+            unconfirmed = 0
+            if attempts >= 2:
+                return finish("source-investigation", application, signature=signature,
+                              observations=observations, attempts=attempts)
             # Derive the component from the authenticated world checkpoint;
             # only its Value is written, never a caller-supplied member/target.
             state = json.loads(stage.expected_state)

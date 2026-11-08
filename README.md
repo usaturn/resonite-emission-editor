@@ -31,7 +31,7 @@ Root全体の値の完全一致は必要ありません。Rootの位置・回転
 
 厳密な`compare_subtree`と非Root所有親の`compare_deletion`は保持します。過去のone-use Root一致/初回失敗停止スクリプトは現在の進行条件として再利用しません。`drivegate_controller.run_command`は内部のprivate Command 1–6と独立した再capture要求だけを扱います。新しい`NativeDeployedStage`を再検証して、完全値/Before/Doneが適用済みなら再送せず、元checkpointと一致する未適用なら別attemptで再試行します。部分適用や不明状態は書き込まず再観測し、反復時はsource調査へ戻します。executionごとのwriter lockと元baselineの変更拒否、launch intent/プロセス終了/raw/各観測をcheckout外の専用journalへ保存します。任意argv/writer callbackは受け付けず、既存live CLI入口にも接続しません。
 
-このCommand部分だけで全mutation controller完了とはしません。新しいnative reader、create/deploy/helper削除/最終cleanupの適用確認と回復、currentHEAD package・fullpreflight・実機0–6は後続です。Root診断やfake CLIの検証をnative成功にしません。
+このCommand部分だけで全mutation controller完了とはしません。新しいnative reader、create/deploy/helper削除/最終cleanupの適用確認と回復、currentHEAD package・fullpreflight・実機0–6は後続です。実機接続前のfullpreflightでは、実行に使うPATH上のCLIの解決先と実versionを記録し、封印した`cliVersion`/SDK/sourceと照合する必要があります。このCommand API単体はCLI実行ファイルのinventoryを認証しません。また、journalのbaseline bindingはstage descriptorとstate bytesのfingerprintであり、raw全体の暗号学的な認証とは呼びません。実機readerは各phaseの期待treeを封印宣言/元baselineから作り、観測値を期待へ採用しないことが必要です。Root診断やfake CLIの検証をnative成功にしません。
 
 ### 短い native Drive gate のオフライン準備
 
