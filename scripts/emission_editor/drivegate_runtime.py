@@ -230,6 +230,49 @@ def assess_owned_graph(tree: dict, *, package: Path, execution: Path, reviewed_t
         return _result([str(exc) if str(exc).startswith("missing:") else "owned-graph:" + str(exc)])
 
 
+def assess_native_owned_graph(tree: dict, *, package: Path, execution: Path, reviewed_tree: dict,
+                              state_bytes: bytes, parsed_records: dict, native_layouts: dict,
+                              library_path: Path, sdk_directory: Path, roles: tuple[str, ...]) -> Verdict:
+    """Receipt-bound full native layout/ownership, then runtime semantic subset.
+
+    Unlike the legacy BSON-only assess_owned_graph, this includes every passive
+    component/default/slot and derives all component/member alias maps itself.
+    Success remains a named offline stage, not full preflight/native execution.
+    """
+    from .drivegate_native import load_native_layout
+    from .drivegate_layout import compare_native_runtime
+    try:
+        if (not roles or len(set(roles)) != len(roles) or not set(roles) <= MODULES.keys()
+                or set(parsed_records) != set(roles) or set(native_layouts) != set(roles)):
+            return Verdict("failed", ("native-module-role-coverage",))
+        artifact = verify_runtime_execution(package, execution)
+        if artifact.status != "passed":
+            return artifact
+        scope = compare_subtree(reviewed_tree, tree)
+        if scope.status != "passed":
+            return scope
+        fields, stable, _, _ = _owned_scope(package, tree, state_bytes, roles)
+        seal = verify_package(package)
+        for role in roles:
+            module = MODULES[role]
+            parsed = load_sealed_record(package, module, parsed_records[role])
+            if parsed.status != "passed":
+                return parsed
+            native = load_native_layout(package, module, native_layouts[role],
+                                        library_path=library_path, sdk_directory=sdk_directory)
+            if native.status != "passed":
+                return native
+            bindings = ({k: m["id"] for k, m in fields.items()} if role == "probe" else
+                        {"Driven": fields["ColorTarget" if role == "color" else "BoolTarget"]["id"]})
+            compared = compare_native_runtime(parsed.data[0], native.data[0], stable["drivegate-" + role],
+                module=module, private_bindings=bindings, native_dll_sha256=seal["dllSha256"])
+            if compared.status != "passed":
+                return compared
+        return Verdict("passed", data=(fields, stable))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        return _result(["native-owned-graph:" + str(exc)])
+
+
 @dataclass(frozen=True)
 class DeployedStage:
     """Original evidence for ONE post-deploy observation, not a PASS assertion.
@@ -253,6 +296,18 @@ class DeployedStage:
     parsed_records: dict
     id_maps: dict
     roles: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class NativeDeployedStage(DeployedStage):
+    """Current native stage: original full-layout and BSON receipts are required.
+
+    The parent type remains for legacy offline checks; a current native
+    controller must use this type for every deployed/phase/cleanup stage.
+    """
+    native_layouts: dict
+    native_library_path: Path
+    native_sdk_directory: Path
 
 
 def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) -> Verdict:
@@ -319,6 +374,12 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
                 if key in physical:
                     return Verdict("failed", ("stage-reused-physical-evidence",))
                 physical.add(key)
+        if isinstance(stage, NativeDeployedStage):
+            return assess_native_owned_graph(fixture, package=package, execution=execution,
+                reviewed_tree=stage.reviewed_fixture, state_bytes=stage.expected_state,
+                parsed_records=stage.parsed_records, native_layouts=stage.native_layouts,
+                library_path=stage.native_library_path, sdk_directory=stage.native_sdk_directory,
+                roles=stage.roles)
         return assess_owned_graph(fixture, package=package, execution=execution,
                                   reviewed_tree=stage.reviewed_fixture, state_bytes=stage.expected_state,
                                   parsed_records=stage.parsed_records, id_maps=stage.id_maps, roles=stage.roles)

@@ -1,0 +1,1114 @@
+{
+  "nativeDllSha256": {
+    "FrooxEngine.dll": "1c333e18ec8a08764e717ae43e8103dc34c1cc0406048ec2788e78650c4f3560",
+    "ProtoFluxBindings.dll": "d87cac29a919e27cb5ceea8d2edcca11dbb53de84b918bbcd96e8803d185c19d",
+    "Elements.Core.dll": "548f6f54439b7373855bfaf72ca4463c40253c7d1dbc6e467cf322c6a1cec824",
+    "ResoniteLink.dll": "43e4355771ad9857b9dcbbb7ea8ca1553a96f831206d4ffdaac429cf55b19bb1",
+    "ProtoFlux.Core.dll": "9fe966d0023ab7a1a5bc3060e1f110e27d2d01c27c438398b86b877aec083e4a",
+    "Renderite.Shared.dll": "e6201800dc31d5ee6efc0fde9807ea5b3465dbd80c845155a4fc067ee81bbc6b"
+  },
+  "components": {
+    "[FrooxEngine]FrooxEngine.DynamicReferenceVariable<[FrooxEngine]FrooxEngine.IWorldElement>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "VariableName": {
+          "kind": "field",
+          "type": "System.String"
+        },
+        "Reference": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.IWorldElement"
+        },
+        "OverrideOnLink": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[FrooxEngine]FrooxEngine.DynamicReferenceVariable<[FrooxEngine]FrooxEngine.Slot>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "VariableName": {
+          "kind": "field",
+          "type": "System.String"
+        },
+        "Reference": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.Slot"
+        },
+        "OverrideOnLink": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[FrooxEngine]FrooxEngine.DynamicTypeVariable": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "VariableName": {
+          "kind": "field",
+          "type": "System.String"
+        },
+        "Value": {
+          "kind": "field",
+          "type": "System.Type"
+        },
+        "OverrideOnLink": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true,
+        "OverrideOnLink": false
+      }
+    },
+    "[FrooxEngine]FrooxEngine.DynamicVariableSpace": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "SpaceName": {
+          "kind": "field",
+          "type": "System.String"
+        },
+        "OnlyDirectBinding": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true,
+        "OnlyDirectBinding": false
+      }
+    },
+    "[FrooxEngine]FrooxEngine.ProtoFlux.CoreNodes.FieldDriveBase<bool>+Proxy": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Node": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IProtoFluxNode"
+        },
+        "Path": {
+          "kind": "list",
+          "element": {
+            "kind": "reference",
+            "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IProtoFluxNode"
+          }
+        },
+        "Drive": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.IField<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true,
+        "Path": []
+      }
+    },
+    "[FrooxEngine]FrooxEngine.ProtoFlux.CoreNodes.FieldDriveBase<colorX>+Proxy": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Node": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IProtoFluxNode"
+        },
+        "Path": {
+          "kind": "list",
+          "element": {
+            "kind": "reference",
+            "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IProtoFluxNode"
+          }
+        },
+        "Drive": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.IField<colorX>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true,
+        "Path": []
+      }
+    },
+    "[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IValue<bool>>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Reference": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.IValue<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IValue<colorX>>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Reference": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.IValue<colorX>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IValue<int>>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Reference": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.IValue<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueFieldDrive<bool>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueFieldDrive<colorX>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<colorX>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueSource<bool>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Source": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IGlobalValueProxy<[FrooxEngine]FrooxEngine.IValue<bool>>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueSource<colorX>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Source": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IGlobalValueProxy<[FrooxEngine]FrooxEngine.IValue<colorX>>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueSource<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Source": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.IGlobalValueProxy<[FrooxEngine]FrooxEngine.IValue<int>>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.FireOnValueChange<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnlyForUser": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeObjectOutput<[FrooxEngine]FrooxEngine.User>"
+        },
+        "OnChanged": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.ISyncNodeOperation"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Enums.IntToEnum<[Renderite.Shared]Renderite.Shared.ColorProfile>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Users.HostUser": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.If": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnTrue": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "OnFalse": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "Condition": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.LocalValue<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.AND_Bool": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "A": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        },
+        "B": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.NOT_Bool": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "A": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.Pack_ColorX": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "R": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<float>"
+        },
+        "G": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<float>"
+        },
+        "B": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<float>"
+        },
+        "A": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<float>"
+        },
+        "Profile": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<[Renderite.Shared]Renderite.Shared.ColorProfile>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueGreaterOrEqual<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "A": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        },
+        "B": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueLessOrEqual<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "A": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        },
+        "B": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Sequence": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Calls": {
+          "kind": "list",
+          "element": {
+            "kind": "reference",
+            "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.ISyncNodeOperation"
+          }
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueConditional<bool>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnTrue": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        },
+        "OnFalse": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        },
+        "Condition": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueConditional<colorX>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnTrue": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<colorX>"
+        },
+        "OnFalse": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<colorX>"
+        },
+        "Condition": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueEquals<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "A": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        },
+        "B": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<bool>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Value": {
+          "kind": "field",
+          "type": "System.Boolean"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<float>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Value": {
+          "kind": "field",
+          "type": "System.Single"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "Value": {
+          "kind": "field",
+          "type": "System.Int32"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,bool>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnWritten": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "OnFail": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "Variable": {
+          "kind": "reference",
+          "targetType": "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.IVariable<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,bool>"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<bool>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,colorX>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnWritten": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "OnFail": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "Variable": {
+          "kind": "reference",
+          "targetType": "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.IVariable<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,colorX>"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<colorX>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnWritten": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "OnFail": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "Variable": {
+          "kind": "reference",
+          "targetType": "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.IVariable<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,int>"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    },
+    "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueWrite<int>": {
+      "members": {
+        "persistent": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "UpdateOrder": {
+          "kind": "field",
+          "type": "System.Int32"
+        },
+        "Enabled": {
+          "kind": "field",
+          "type": "System.Boolean"
+        },
+        "OnWritten": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "OnFail": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeOperation"
+        },
+        "Variable": {
+          "kind": "reference",
+          "targetType": "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.IVariable<[ProtoFlux.Core]ProtoFlux.Runtimes.Execution.ExecutionContext,int>"
+        },
+        "Value": {
+          "kind": "reference",
+          "targetType": "[FrooxEngine]FrooxEngine.ProtoFlux.INodeValueOutput<int>"
+        }
+      },
+      "defaults": {
+        "persistent": true,
+        "UpdateOrder": 0,
+        "Enabled": true
+      }
+    }
+  },
+  "format": "emission-native-model-v1",
+  "provenance": {
+    "scope": "Exact native DLLs; no observed world snapshot used as a default.",
+    "members": "GetSyncMember field references; NameOverride attributes; generic declaring-type substitution; SyncRef target types.",
+    "defaults": "ComponentBase.Initialize; WorkerInitializer DefaultUpdateOrder over inheritance; SyncField ctor/Coder.Default; Slot.Initialize; ProtoFluxEngineProxy/SyncRefList/SyncElementList constructors.",
+    "typeField": "ResoniteLink.Field_Type.ValueType=System.Type; BoxedValue=Type string. ModelMapper.MapMember serializes this string.",
+    "alias": "ResoniteLinkReferenceManager.GetID/EnsureReference and BiDictionary.Add: session-local bijection, not persistent RefIDs."
+  },
+  "slotMembers": {
+    "Parent": {
+      "kind": "reference",
+      "targetType": "[FrooxEngine]FrooxEngine.Slot"
+    },
+    "Position": {
+      "kind": "field",
+      "type": "ResoniteLink.float3",
+      "default": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    "Rotation": {
+      "kind": "field",
+      "type": "ResoniteLink.floatQ",
+      "default": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      }
+    },
+    "Scale": {
+      "kind": "field",
+      "type": "ResoniteLink.float3",
+      "default": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "IsActive": {
+      "kind": "field",
+      "type": "System.Boolean",
+      "default": true
+    },
+    "IsPersistent": {
+      "kind": "field",
+      "type": "System.Boolean",
+      "default": true
+    },
+    "Name": {
+      "kind": "field",
+      "type": "System.String"
+    },
+    "Tag": {
+      "kind": "field",
+      "type": "System.String",
+      "default": null
+    },
+    "OrderOffset": {
+      "kind": "field",
+      "type": "System.Int64",
+      "default": 0
+    }
+  }
+}

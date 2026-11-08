@@ -50,6 +50,16 @@ package は CLI / SDK の版、DLL 一式の SHA-256 による識別情報、準
 
 出力は passive metadata を含む全 AddSlot/AddComponent 操作です。private port は `private:<port>`、親は `native-layout-parent` の記号で、実 ID を指定・適用する入口はありません。link の初期化・Query・Loader を呼ばず、native 接続も行いません。未知の操作、所有外参照、入力/出力の改変、非 0 終了を成功にしません。
 
-`passed` は**オフライン生成証跡の検証だけ**です。未送信 member の native default、実機 ID/所有との対応、全 layout 比較、controller の自動回復・再試行への接続は未完了です。既存の runtime-only 比較器へ全 component を渡す問題は、この入口を足しただけでは解決していません。BSON の 3D 配置や metadata を native の期待値として丸写ししないための入力です。`nativeSucceeded` / `complete` / `executionPermission` は false のままです。
+`passed` は**オフライン生成証跡の検証だけ**です。BSON の 3D 配置や metadata を native の期待値として丸写ししないための入力です。`nativeSucceeded` / `complete` / `executionPermission` は false のままです。
+
+### native 全構造と runtime 意味の照合（Task2b-b）
+
+`drivegate_layout.py` の `compare_native_layout` は、全操作と `drivegate_native_model.json` の独立した native 型・既定値から期待値を作り、所有親配下の全 slot/component/member を照合します。slot は親・Name・PG の source-span Tag、component は型・必要に応じて VariableName、member は所有と名前から対応付けます。同名兄弟の並び順や、別コンパイルの alias 値の一致を所有の根拠にしません。内部 member alias、private port、null、System.Type の型文字列、list と targetType も含めて検査し、曖昧な対応、未知 payload、余分な要素・member は拒否します。
+
+モデルは対象 native DLL のハッシュに結び付いています。版を固定して導入する機構ではなく、異なる DLL へ古い解釈を流用しないための比較条件です。native が更新されたら source 根拠を調査・レビューしてモデルを更新します。実観測値を既定値として採用しません。
+
+`compare_native_runtime` は全構造の合格後だけ、BSON の runtime 意味検査へ接続します。除くことができるのは、すでに全構造で検証した独立既定値の member だけです。passive metadata の無条件除外で件数を合わせません。pure 比較への入力の出所は呼出側が保証する必要があります。実行側は `drivegate_runtime.assess_native_owned_graph` と `NativeDeployedStage` を使い、元の layout/BSON receipt、同じ package、現在の DLL、所有 state、private field を結びます。従来の `assess_owned_graph` / `DeployedStage` は旧オフライン検査用であり、現在の native gate の代用にしません。
+
+この照合器のオフライン検証やモデルから作ったサンプルの一致は、実機照合に成功した証拠ではありません。Root 診断化・自動復旧／再試行 controller、現在 HEAD の新 package、実機の全 phase・復元・cleanup は別の未完了作業です。
 
 この API は live 入口に接続しません。ビルド成功や Done だけで native 成功にはせず、`nativeSucceeded` / `complete` / `executionPermission` は常に false です。実機の保全、完全 preflight、各 phase の readback 判定は後続作業です。この短い gate は S4 全体や C9 / C30 / C23 / C31 の合格ではありません。

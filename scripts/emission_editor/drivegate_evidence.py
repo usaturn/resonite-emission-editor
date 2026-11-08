@@ -507,7 +507,8 @@ def _sdk_graph(record, module):
                 members.setdefault("persistent", True)  # Explicit serialized value wins.
             if "persistent" in members and type(members["persistent"]) is not bool:
                 raise ValueError("sdk-persistent-boolean")
-            components[ident] = {"type": typ, "members": members, "slot": name}
+            components[ident] = {"type": typ, "members": members, "slot": name,
+                                 "tag": slot.get("Tag", {}).get("Data")}
             if "GlobalReference<" in typ or ("FieldDriveBase<" in typ and typ.endswith("+Proxy")):
                 prefix, port = name.split(":", 1)
                 member = "Reference" if "GlobalReference<" in typ else "Drive"
