@@ -1,7 +1,10 @@
 """S: two valid same-typed rows must never preview/restore each other's material."""
+from copy import deepcopy
 from pathlib import Path
 
-from scripts.emission_editor import slim
+import pytest
+
+from scripts.emission_editor import slim, slim_demo
 from scripts.emission_editor.model import Avatar, MaterialRow, MaterialUse, RegistryPlan
 
 
@@ -31,3 +34,21 @@ def test_editing_assembly_keeps_each_rows_source_and_original_separate(tmp_path)
         assert components[key+'-original']['initialFields']['Value'] == [row.color[k] for k in ('r','g','b','a')]
         assert components[key+'-selected']['fields']['Drives'] == []
         assert components[key+'-visible']['fields']['Drives'] == ['$slot-member:'+key+'-view.IsActive']
+
+
+def test_fixture_attachment_preserves_material_and_refuses_another_panel():
+    # S: a placement-only adjustment must not reset a committed color or attach
+    # the test avatar to a different trial panel. Keep the original document too.
+    document = slim_demo.fixture('sample-a')
+    document['children'][0]['components'][0]['initialFields']['EmissionColor'] = [7,.5,2,.23]
+    original = deepcopy(document)
+    attached = slim_demo.attached_fixture(document,'ResoLoop_Test_EmissionEditor_Slim_sample-a')
+    assert attached['slot']['parent'] == 'Root/ResoLoop_Test_EmissionEditor_Slim_sample-a'
+    assert attached['ownership'] == original['ownership']
+    assert attached['children'][0] == original['children'][0]
+    for before,after in zip(original['children'][1:],attached['children'][1:]):
+        assert before['components'] == after['components']
+        assert before['slot']['key'] == after['slot']['key']
+    assert document == original
+    with pytest.raises(ValueError,match='fixture-panel-identity-mismatch'):
+        slim_demo.attached_fixture(document,'ResoLoop_Test_EmissionEditor_Slim_sample-b')

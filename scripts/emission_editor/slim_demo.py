@@ -4,6 +4,7 @@ Run `prepare` once into a NEW directory; subsequent `observe` is read-only.
 The deployed native panel continues working without this process.
 """
 import argparse
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import UTC, datetime
 import json
@@ -73,6 +74,38 @@ def fixture(token):
         'children':[material,*meshes]}
 
 
+def attached_fixture(document, panel_name):
+    """Keep both samples beside their matching panel without touching material data."""
+    prefix = 'emission-slim-fixture-'
+    owner = document['ownership']['key']
+    if not owner.startswith(prefix) or panel_name != 'ResoLoop_Test_EmissionEditor_Slim_'+owner[len(prefix):]:
+        raise ValueError('fixture-panel-identity-mismatch')
+    result = deepcopy(document)
+    result['slot'].update(parent='Root/'+panel_name,position=[1.1,-.05,-.15],relocationTransform='local')
+    for i in range(2):
+        mesh = next(n for n in result['children'] if n['slot']['key']=='demo-mesh-'+str(i))
+        mesh['slot']['position'] = [0,-.4*i,0]
+    return result
+
+
+def _attach_fixture(demo, root, declaration, panel):
+    state = root/'fixture-state.json'
+    original_state = json.loads(state.read_bytes())
+    before = demo.component(state,'demo-material')['members']['EmissionColor']['value']
+    path = root/'fixture-attached.json'
+    _save(path,attached_fixture(declaration,panel['slot']['name']))
+    plan = demo.run('diff',path,'--state',state)
+    if (plan['creates'] or plan['deletes'] or any(op['kind']!='slot' or op['key'] not in ('demo-root','demo-mesh-1') for op in plan['changes'])):
+        raise ValueError('fixture-placement-unexpected-plan')
+    demo.run('apply',path,'--state',state)
+    current_state = json.loads(state.read_bytes())
+    for kind in ('slots','components'):
+        if {k:v['id'] for k,v in original_state[kind].items()} != {k:v['id'] for k,v in current_state[kind].items()}:
+            raise ValueError('fixture-placement-changed-identities')
+    if demo.component(state,'demo-material')['members']['EmissionColor']['value'] != before:
+        raise ValueError('fixture-placement-changed-color')
+
+
 def prepare(directory, url, library):
     root = Path(directory).absolute()
     if root.resolve().is_relative_to(CODE_ROOT):
@@ -122,6 +155,7 @@ def prepare(directory, url, library):
     saved_panel = json.loads(panel_state.read_bytes())
     if saved_panel['ownershipKey'] != panel['ownership']['key']:
         raise ValueError('panel-state-ownership-mismatch')
+    _attach_fixture(demo,root,declaration,panel)
     return _populate_and_deploy(root,demo,plan,saved,saved_panel,panel)
 
 

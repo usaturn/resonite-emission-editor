@@ -39,6 +39,7 @@ def render_panel(registry, *, template):
     generation = next(n for n in registry_root['children'] if n['slot']['key'] == 'reg-' + registry.generation)
     components = _components(document)
     components['ui-title-text']['fields']['Content'] = '動作確認用・新パネル [' + registry.generation[:8] + ']'
+    components['ui-subtitle-text']['fields']['Content'] = 'RGB入力でライブ反映 · OK／キャンセル後は一覧から選び直してください'
     acquire = components['ui-acquire-label-text']
     acquire['initialFields'] = {'Content':acquire['fields'].pop('Content')}
     for i, row in enumerate(registry.rows):
