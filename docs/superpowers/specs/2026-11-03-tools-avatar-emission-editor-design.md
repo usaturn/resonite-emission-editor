@@ -1,5 +1,7 @@
 # Resonite アバター発光編集パネル
 
+> **Issue #3の作業方針（2026-11-08更新）:** create-reso-world の `docs/superpowers/specs/2026-11-07-emission-issue-3-native-gate-design.md`を適用する。Root全体の値の完全一致は不要。不一致・切断・検査失敗は原因調査/修正/回復後に自動再試行する。保護範囲・比較対象の実質変更は今回のIssue作業全体では追加確認不要。以下の旧停止/確認待ち記録は履歴であって、この3点の現在の進行規則ではない。元値保持・外部変更の上書き防止等の機能仕様や、過去の失敗判定を自動的に変更する指示ではない。
+
 - 状態: approved
 - 文書管理リポジトリ: usaturn/create-reso-world
 - 文書の作業先（DOC_ROOT）: `/workspaces/reso-world/.worktrees/tools-emission-editor`

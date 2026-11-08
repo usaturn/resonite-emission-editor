@@ -4,7 +4,7 @@ Resonite のアバター EmissionColor を編集するツールの、実験中�
 
 このパッケージはオフラインの検査と、明示した project context での宣言生成までです。live の inspect / register / unregister は無効です。実機への切替は別の計画と許可が要ります。
 
-このツールの設計と実装計画は `docs/superpowers/` にあります。
+元機能の設計・実装計画は `docs/superpowers/` にあります。Issue #3の現在の作業・検証方針は、create-reso-worldの`docs/superpowers/specs/2026-11-07-emission-issue-3-native-gate-design.md`と対応Planに定義します。
 
 ## 開発
 
@@ -20,6 +20,14 @@ ProtoFlux の check / build は、`RESONITE_MANAGED_DATA_PATH` に managed DLL �
 `scripts/emission_editor/read_receipts.py` は、限定した読み取り要求から CLI 引数を生成し、raw stdout/stderr と実終了コードを新規ディレクトリへ保存する内部モジュールです。読み込み時に要求・引数・raw のハッシュを照合します。既存の live CLI 入口には接続していません。
 
 `transportSucceeded` は CLI の終了コードと JSON envelope の確認だけです。native の動作、doctor の全項目、対象の session、結線、詳細 diff、全 preflight の成功を示しません。`complete` と `executionPermission` は常に false で、書き込みを許可しません。必要な二重読み・保全・封印資料との照合は別に行います。receipt と raw をすべて整合的に書き換えた場合の出所を認証する仕組みではありません。
+
+### Issue #3 作業の比較・自動再試行方針
+
+Root全体の値の完全一致は必要ありません。Rootの位置・回転やsolver等の時点差分は記録し、操作対象のsession/所有/write-set、明示した保護対象、private Before/完全色/型/readback/Doneを別に検証します。不一致・接続/検査失敗は調査・修正・再観測・自動再試行へ進め、最初の差分でIssue全体を止めません。書込/deploy/削除の再試行は、適用済みか読み戻してから行い、盲目的な二重送信を避けます。
+
+本Issueの作業全体に限り、保護範囲や比較対象の実質的な見直しも追加確認は不要です。担当が理由・新範囲・検証を記録して進めます。他Issueへの一般化、対象外への変更、未知情報の成功化、過去のraw/seal/Beforeの上書きはしません。
+
+これは現在の作業方針です。以下の低レベル比較APIや過去のone-use試行スクリプトには厳密比較/初回失敗時終了が残っており、Root全体の進行条件としてそのまま使わず、対応実装と再試行経路を別途修正します。今回の記載更新は実装修正やnative再試行の実行そのものではありません。
 
 ### 短い native Drive gate のオフライン準備
 
