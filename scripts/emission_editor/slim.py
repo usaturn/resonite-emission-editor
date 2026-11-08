@@ -38,6 +38,9 @@ def render_panel(registry, *, template):
     registry_root = next(n for n in document['children'] if n['slot']['key'] == 'registry-root')
     generation = next(n for n in registry_root['children'] if n['slot']['key'] == 'reg-' + registry.generation)
     components = _components(document)
+    components['ui-title-text']['fields']['Content'] = '動作確認用・新パネル [' + registry.generation[:8] + ']'
+    acquire = components['ui-acquire-label-text']
+    acquire['initialFields'] = {'Content':acquire['fields'].pop('Content')}
     for i, row in enumerate(registry.rows):
         key = f'reg-{registry.generation}-row-{i}'
         record = next(n for n in generation['children'] if n['slot']['key'] == key)
@@ -79,7 +82,7 @@ def _globals(generation):
         'Status':('ui-status','Value'), 'RowCount':(f'reg-{generation}-row-count','Value'),
         'ActiveGeneration':(f'reg-{generation}-visible','Value'),
         'CanOk':('ui-ok-button','Enabled'), 'CanRestore':('ui-restore-button','Enabled'),
-        'CanCancel':('ui-cancel-button','Enabled'),
+        'CanCancel':('ui-cancel-button','Enabled'), 'AcquireLabel':('ui-acquire-label-text','Content'),
     }
     result = {name:_ref(key,member) for name,(key,member) in values.items()}
     for name, key in (('OkButton','ui-ok-button'),('RestoreButton','ui-restore-button'),('CancelButton','ui-cancel-button')):

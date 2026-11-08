@@ -14,7 +14,11 @@ in EditEpoch: int mutable
 in SelectedRoot: FrooxEngine.Slot mutable
 in NullRoot: FrooxEngine.Slot
 out CanInteract: bool
+out AcquireLabel: string
 where {
+    // Visible feedback even when the operator is already acquired and pressing
+    // the start button again intentionally performs no state mutation.
+    AcquireLabel = if IsNull<FrooxEngine.User>(Instance=Operator) then "編集を開始" else "開始済み";
     _idle = not Busy and not RecoveryPending and not PreviewActive and OperationStage == 0;
     CanInteract = UiReady and Ready and Operator == LocalUser and _idle;
     // D7: claiming is allowed while a recovery is pending (to retry), never during an operation or a preview without one.
