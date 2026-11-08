@@ -326,7 +326,7 @@ def test_sdk_runtime_resolves_type_indices_and_all_edges_not_presentation_names(
 
 
 def sealed_fixture(root):
-    # Small self-contained valid v2 inventory, not a mock of verification.
+    # Small self-contained valid v3 inventory, not a mock of verification.
     from scripts.emission_editor.drivegate_package import fixture_declaration, _manifests, FORMAT
     package, execution = root / "seal", root / "execution"
     package.mkdir()
@@ -341,8 +341,14 @@ def sealed_fixture(root):
         (package / "manifests" / (role + ".json")).write_text(json.dumps(manifest))
     inventory = {str(p.relative_to(package)): hashlib.sha256(p.read_bytes()).hexdigest()
                  for p in package.rglob("*") if p.is_file()}
+    normalized = fixture_declaration("offline")
+    # Independently authored installed-normalizer expectation, not its producer.
+    normalized["components"].append({
+        "key": "drivegate-root/component:FrooxEngine.AI_GeneratedContent:0",
+        "type": "FrooxEngine.AI_GeneratedContent", "fields": {"Source": "[resoloop 0.2.0]"}})
     seal = {"format": FORMAT, "token": "offline", "executionRoot": str(execution), "files": inventory,
-            "codeCommit": "0" * 40, "cliVersion": "test", "sdkVersion": "test", "dllSha256": {"test.dll": "0" * 64},
+            "codeCommit": "0" * 40, "cliVersion": "0.2.0", "sdkVersion": "test", "dllSha256": {"test.dll": "0" * 64},
+            "normalizedFixture": normalized,
             "complete": False, "executionPermission": False, "nativeSucceeded": False}
     (package / "seal.json").write_text(json.dumps(seal))
     (package / "seal.sha256").write_text(hashlib.sha256((package / "seal.json").read_bytes()).hexdigest())

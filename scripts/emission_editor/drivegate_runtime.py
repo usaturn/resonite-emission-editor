@@ -9,7 +9,10 @@ import json
 from pathlib import Path
 import subprocess
 
-from .drivegate_package import MODULES, _no_links, verify_package, verify_execution
+from .drivegate_package import (
+    MODULES, GENERATED_CONTENT_KEY, GENERATED_CONTENT_TYPE,
+    _no_links, verify_package, verify_execution,
+)
 from .drivegate_evidence import (
     Verdict, _result, _tree, _sdk_graph, _sdk_audit, compare_subtree,
     compare_sdk_runtime, verify_runtime_execution, _PHASE_TYPES,
@@ -98,7 +101,7 @@ def _owned_scope(package, tree, state_bytes, roles):
     State is not native session identity and is never replayed/adopted. Its bytes
     must ALSO be bound to a current detailed diff by the observation stage.
     """
-    declaration = _decode((Path(package) / "fixture.json").read_bytes())
+    declaration = verify_package(package)["normalizedFixture"]
     state = _decode(state_bytes)
     if (type(state.get("schemaVersion")) is not int or state["schemaVersion"] != 2
             or state.get("ownershipKey") != declaration["ownership"]["key"] or state.get("assets") != {}):
@@ -133,11 +136,19 @@ def _owned_scope(package, tree, state_bytes, roles):
     for key, (declared, slot_key) in expected_components.items():
         entry = state["components"][key]
         comp, parent = components[entry["id"]]
+        native_type = ("[FrooxEngine]" + GENERATED_CONTENT_TYPE
+                       if key == GENERATED_CONTENT_KEY else declared["type"])
         if (entry["slotKey"] != slot_key or parent != state["slots"][slot_key]["id"]
-                or entry["type"] != declared["type"] or comp["type"] != declared["type"]):
+                or entry["type"] != native_type or comp["type"] != native_type):
             raise ValueError("fixture-private-component-identity")
         stable_comp_ids.add(comp["id"])
-        if key != "drivegate-objectroot":
+        if key == GENERATED_CONTENT_KEY:
+            source = comp["members"].get("Source")
+            if (not isinstance(source, dict) or source.get("kind") != "field"
+                    or source.get("type") != "System.String"
+                    or source.get("value") != declared["fields"]["Source"]):
+                raise ValueError("fixture-generated-content-source")
+        elif key != "drivegate-objectroot":
             name = key.removeprefix("drivegate-")
             value = comp["members"].get("Value")
             if not isinstance(value, dict) or value.get("kind") != "field" or value.get("type") != _PHASE_TYPES[name]:
@@ -289,7 +300,7 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
             declared_keys.update(("component", c["key"]) for c in node["components"])
             for child in node["children"]:
                 keys(child)
-        keys(declaration)
+        keys(verify_package(package)["normalizedFixture"])
         if {(op["kind"], op["key"]) for op in diff.data[0]["operations"]} != declared_keys:
             return Verdict("failed", ("stage-diff-declaration-coverage",))
         # The diff must lie inside the SAME native-session brackets, not just a
@@ -548,7 +559,7 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
             expected_keys.update(("component", c["key"]) for c in node["components"])
             for child in node["children"]:
                 keys(child)
-        keys(declaration)
+        keys(verify_package(package)["normalizedFixture"])
         operations = scope.fixture_diff.expected_plan["operations"]
         if (any(op["action"] != "create" for op in operations)
                 or {(op["kind"], op["key"]) for op in operations} != expected_keys):

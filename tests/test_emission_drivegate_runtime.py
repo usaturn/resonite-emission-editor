@@ -48,6 +48,14 @@ def owned_fixture():
              "components": {"drivegate-objectroot": {"id": "objectroot", "slotKey": "drivegate-root", "type": "[FrooxEngine]FrooxEngine.ObjectRoot", "typeOrdinal": 0},
                             **{"drivegate-" + name: {"id": "field-" + name, "slotKey": "drivegate-fields", "type": comp["type"], "typeOrdinal": 0}
                                for name, comp in zip(phase_baseline(), fields)}}}
+    tree["components"].append({
+        "id": "provenance", "type": "[FrooxEngine]FrooxEngine.AI_GeneratedContent",
+        "members": {"persistent": field("System.Boolean", True, "prov-persistent"),
+                    "UpdateOrder": field("System.Int32", 0, "prov-order"),
+                    "Enabled": field("System.Boolean", True, "prov-enabled"),
+                    "Source": field("System.String", "[resoloop 0.2.0]", "prov-source")}})
+    state["components"]["drivegate-root/component:FrooxEngine.AI_GeneratedContent:0"] = {
+        "id": "provenance", "slotKey": "drivegate-root", "type": "[FrooxEngine]FrooxEngine.AI_GeneratedContent", "typeOrdinal": 0}
     # State paths must represent actual stable ancestry, not merely matching IDs.
     for key, value in state["slots"].items():
         if key != "drivegate-root":
@@ -92,6 +100,44 @@ def test_graph_binding_is_derived_from_complete_owned_fixture_not_caller_ids(tmp
     misplaced["children"][2]["children"] = misplaced["children"][3]["children"]
     misplaced["children"][3]["children"] = []
     assert runtime.assess_owned_graph(misplaced, **(args | {"reviewed_tree": deepcopy(misplaced)})).status != "passed"
+
+
+def test_generated_root_provenance_is_exact_and_never_a_private_value(tmp_path, monkeypatch):
+    # S: ignoring generated metadata or trusting a reviewed tree alone can admit
+    # an undeclared component, wrong attribution, or a marker on another parent.
+    package, execution = sealed_fixture(tmp_path)
+    fake_parser(tmp_path, monkeypatch)
+    parsed = tmp_path / "parsed"
+    assert runtime.parse_sealed_record(package, "BoolDrive", parsed).status == "passed"
+    tree, state_bytes = owned_fixture()
+    state = json.loads(state_bytes)
+    marker_key = "drivegate-root/component:FrooxEngine.AI_GeneratedContent:0"
+    def assess(current, current_state):
+        return runtime.assess_owned_graph(current, package=package, execution=execution,
+            reviewed_tree=deepcopy(current), state_bytes=json.dumps(current_state).encode(),
+            parsed_records={"bool": parsed}, id_maps={"bool": {
+                "node-value": "Reso_1", "node-drive": "Reso_2", "node-proxy": "Reso_3"}}, roles=("bool",))
+
+    result = assess(tree, state)
+    assert result.status == "passed", result.issues
+    assert set(result.data[0]) == set(phase_baseline())  # Marker is not a private port.
+    missing, missing_state = deepcopy(tree), deepcopy(state)
+    missing["components"].pop()
+    del missing_state["components"][marker_key]
+    assert assess(missing, missing_state).status != "passed"
+    wrong_source = deepcopy(tree)
+    wrong_source["components"][-1]["members"]["Source"]["value"] = "another tool"
+    assert assess(wrong_source, state).status != "passed"
+    missing_source = deepcopy(tree)
+    del missing_source["components"][-1]["members"]["Source"]
+    assert assess(missing_source, state).status != "passed"
+    relocated, relocated_state = deepcopy(tree), deepcopy(state)
+    relocated["children"][0]["components"].append(relocated["components"].pop())
+    relocated_state["components"][marker_key]["slotKey"] = "drivegate-fields"
+    assert assess(relocated, relocated_state).status != "passed"
+    extra = deepcopy(tree)
+    extra["components"].append({"id": "extra", "type": "[FrooxEngine]FrooxEngine.ObjectRoot", "members": {}})
+    assert assess(extra, state).status != "passed"
 
 
 def staged_fixture(root, monkeypatch):

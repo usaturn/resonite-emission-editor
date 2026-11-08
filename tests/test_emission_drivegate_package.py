@@ -51,6 +51,7 @@ def compiler(tmp_path, monkeypatch):
         "else:\n"
         "    raise AssertionError(args)\n"
         "mode = os.environ.get('FAKE_FAILURE', '')\n"
+        "if mode == 'uncharacterized-cli' and args == ['--version', '--json']: data['version'] = '0.3.0'\n"
         "if mode == 'manifest' and args[:2] == ['flux', 'validate-manifest']: data['valid'] = 1\n"
         "if mode == 'execution-changed' and args[:2] == ['flux', 'validate-manifest']:\n"
         "    Path(manifest['modules'][0]['source'] + '.brson').write_bytes(b'changed-during-validation')\n"
@@ -100,6 +101,15 @@ def walk(node):
     yield node
     for child in node.get('children', []):
         yield from walk(child)
+
+
+def test_uncharacterized_cli_cannot_seal_unknown_generated_scope(compiler, monkeypatch, tmp_path):
+    # S: an uncharacterized normalizer can add plausible undeclared world changes.
+    monkeypatch.setenv("FAKE_FAILURE", "uncharacterized-cli")
+    output = tmp_path / "package"
+    with pytest.raises(ValueError, match="normalization"):
+        prepare(compiler, monkeypatch, output)
+    assert not (output / "seal.json").exists()
 
 
 def test_package_builds_copies_not_sources_and_never_grants_native_permission(compiler, monkeypatch, tmp_path):

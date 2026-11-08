@@ -24,7 +24,9 @@ FIELDS = {
     "ColorAfter": ("colorX", [0.0, 0.0, 0.0, 1.0]), "BoolAfter": ("bool", False),
     "Done": ("int", 0),
 }
-FORMAT = "emission-drivegate-package-v2"
+FORMAT = "emission-drivegate-package-v3"
+GENERATED_CONTENT_KEY = "drivegate-root/component:FrooxEngine.AI_GeneratedContent:0"
+GENERATED_CONTENT_TYPE = "FrooxEngine.AI_GeneratedContent"
 
 
 def fixture_declaration(token: str) -> dict:
@@ -47,6 +49,24 @@ def fixture_declaration(token: str) -> dict:
               for role, name in MODULES.items()],
         ],
     }
+
+
+def normalized_fixture(token: str, cli_version: str) -> dict:
+    """Expected installed normalization, NOT a declaration to pass to apply.
+
+    ResoLoop 0.2.0 GeneratedContentMetadata.AddToGeneratedRoots appends one
+    unkeyed marker to this root. WorldService derives its stable key from the
+    bare type and ordinal. No child in this private fixture is a portable root.
+    Fail closed for a CLI whose normalization has not been characterized.
+    """
+    if cli_version != "0.2.0":
+        raise ValueError("drivegate-uncharacterized-normalization")
+    fixture = fixture_declaration(token)
+    fixture["components"].append({
+        "key": GENERATED_CONTENT_KEY, "type": GENERATED_CONTENT_TYPE,
+        "fields": {"Source": "[resoloop " + cli_version + "]"},
+    })
+    return fixture
 
 
 def _manifests(root: Path) -> dict:
@@ -180,6 +200,7 @@ def prepare_package(destination: Path, token: str, *, library_path: Path) -> dic
     sdk = _offline(root, "sdk-version", ["flux", "status"])
     if sdk.get("available") is not True or not sdk.get("version") or not cli.get("version"):
         raise ValueError("drivegate-tool-version-missing")
+    normalized = normalized_fixture(token, cli["version"])
     for name in MODULES.values():
         path = root / "sources" / (name + ".pg")
         for action in ("check", "build"):
@@ -209,6 +230,7 @@ def prepare_package(destination: Path, token: str, *, library_path: Path) -> dic
     seal = {
         "format": FORMAT, "token": token, "codeCommit": commit, "executionRoot": str(execution),
         "cliVersion": cli["version"], "sdkVersion": sdk["version"], "dllSha256": dlls,
+        "normalizedFixture": normalized,
         "complete": False, "executionPermission": False, "nativeSucceeded": False,
         "files": _files(root),
     }
@@ -243,6 +265,8 @@ def verify_package(path: Path) -> dict:
             raise ValueError("drivegate-seal-invalid")
         if json.loads((root / "fixture.json").read_bytes()) != fixture_declaration(seal["token"]):
             raise ValueError("drivegate-fixture-changed")
+        if seal["normalizedFixture"] != normalized_fixture(seal["token"], seal["cliVersion"]):
+            raise ValueError("drivegate-normalization-changed")
         execution = Path(seal["executionRoot"])
         if (not execution.is_absolute() or execution != execution.resolve()
                 or execution.is_relative_to(root) or root.is_relative_to(execution)):
