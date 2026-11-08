@@ -136,10 +136,7 @@ def test_model_cannot_attest_different_native_dlls():
     assert layout.compare_native_layout(document, parent, **(args | {'native_dll_sha256': changed})).status != 'passed'
 
 
-def test_runtime_projection_is_only_after_full_layout_and_has_no_unchecked_extras():
-    # S: the all-component/runtime-only join must neither reject correct native
-    # metadata nor drop an unchecked graph edge while projecting the subset.
-    document, parent, args, slots, components = native_fixture()
+def runtime_record(slots):
     record = sdk_record()
     bson_nodes = record['Object']['Children'][0]['Children'][0]['Children']
     tags = {n['name']: n['members']['Tag'].get('value') for n in slots.values()}
@@ -147,8 +144,32 @@ def test_runtime_projection_is_only_after_full_layout_and_has_no_unchecked_extra
         node['Tag'] = {'Data': tags[node['Name']['Data']]}
         for c in node['Components']['Data']:
             c['Data']['persistent'] = {'Data': True}
+    return record
+
+
+def test_runtime_projection_is_only_after_full_layout_and_has_no_unchecked_extras():
+    # S: the all-component/runtime-only join must neither reject correct native
+    # metadata nor drop an unchecked graph edge while projecting the subset.
+    document, parent, args, slots, components = native_fixture()
+    record = runtime_record(slots)
     result = layout.compare_native_runtime(record, document, parent, **args)
     assert result.status == 'passed', result.issues
     proxy = next(c for c in components.values() if c['type'].endswith('+Proxy'))
     proxy['members']['Path']['elements'].append({'id': 'foreign-edge', 'kind': 'reference', 'targetId': 'outside'})
+    assert layout.compare_native_runtime(record, document, parent, **args).status != 'passed'
+
+
+def test_projection_cannot_drop_an_explicit_nondefault_native_setting():
+    # S: name membership in a default table is not proof that the deployed value
+    # is the default. A disabled node must not pass an enabled BSON meaning.
+    document, parent, args, slots, _ = native_fixture()
+    record = runtime_record(slots)
+    drive = record['Object']['Children'][0]['Children'][0]['Children'][1]['Components']['Data'][0]
+    del drive['Data']['Enabled']
+    assert layout.compare_native_runtime(record, document, parent, **args).status == 'passed'
+    op = next(o for o in document['operations'] if o['operation'] == 'AddComponent'
+              and '.ValueFieldDrive<' in o['data']['componentType'])
+    op['data']['members']['Enabled'] = {'$type': 'bool', 'id': None, 'value': False}
+    document, parent, args, _, _ = native_fixture(document)
+    assert layout.compare_native_layout(document, parent, **args).status == 'passed'
     assert layout.compare_native_runtime(record, document, parent, **args).status != 'passed'

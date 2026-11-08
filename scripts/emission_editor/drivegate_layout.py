@@ -263,16 +263,19 @@ def compare_native_runtime(record: dict, document: dict, parent: dict, *, module
             key = (s['name']['value'], (s.get('tag') or {}).get('value'), d['componentType'])
             if key in native:
                 raise ValueError('native-runtime-ambiguous-source-span')
-            native[key] = d['id']
+            native[key] = (d['id'], set(d['members']))
         if len(native) != len(graph):
             raise ValueError('native-runtime-all-component-coverage')
         mapping, projection = {}, []
         for ident, c in graph.items():
             key = (c['slot'], c.get('tag'), c['type'])
-            native_id = native.pop(key)
+            native_id, sent_members = native.pop(key)
             actual = observed[native_id]
             extra = set(actual['members']) - set(c['members'])
-            if not extra <= model['components'][c['type']]['defaults'].keys():
+            # A default-table NAME is not proof of a default value: the native
+            # operation may explicitly override it. Only unsent defaults passed
+            # by the preceding full-layout comparison are eligible for removal.
+            if extra & sent_members or not extra <= model['components'][c['type']]['defaults'].keys():
                 raise ValueError('native-runtime-unchecked-extra-member')
             mapping[ident] = aliases[native_id]
             projection.append({'id': actual['id'], 'type': actual['type'],
