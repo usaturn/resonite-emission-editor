@@ -24,6 +24,7 @@ def compare_initial_fields(seal: dict, fields: dict) -> Verdict:
         entries = {c['key'].removeprefix('drivegate-'):c for c in declared['components']}
         if set(entries) != set(_PHASE_TYPES) or set(fields) != set(_PHASE_TYPES):
             raise ValueError('initial-private-field-coverage')
+        expectations = {}
         for name, typ in _PHASE_TYPES.items():
             raw = entries[name]['initialFields']['Value']
             if typ == 'ResoniteLink.colorX':
@@ -33,9 +34,10 @@ def compare_initial_fields(seal: dict, fields: dict) -> Verdict:
             else:
                 value = deepcopy(raw)
             expected = {'kind':'field','id':fields[name]['id'],'type':typ,'value':value}
+            expectations[name] = expected
             checked = compare_typed(expected, fields[name])
             if checked.status != 'passed':
                 return Verdict(checked.status, ('initial-private-value:' + name, *checked.issues))
-        return Verdict('passed')
+        return Verdict('passed', data=(expectations,))
     except (OSError, ValueError, KeyError, TypeError, AttributeError, StopIteration) as exc:
         return Verdict('failed', ('initial-private-evidence:' + str(exc),))

@@ -311,6 +311,16 @@ class NativeDeployedStage(DeployedStage):
     native_sdk_directory: Path
 
 
+@dataclass(frozen=True)
+class CreatedStage(NativeDeployedStage):
+    """Created-only fixture: empty roles/records/layouts; native DLL inventory required.
+
+    This is neither a legacy BSON stage nor a deployed module. The separate
+    source-grounded created comparator authenticates all stable metadata/initial
+    values instead of permitting an empty-role native graph as a general case.
+    """
+
+
 def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) -> Verdict:
     """Join raw/session/window, protection, captured diff, owned scope and SDK.
 
@@ -375,6 +385,18 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
                 if key in physical:
                     return Verdict("failed", ("stage-reused-physical-evidence",))
                 physical.add(key)
+        if isinstance(stage, CreatedStage):
+            from .drivegate_created import compare_created_fixture
+            from .drivegate_native import _dlls
+            if (stage.roles or stage.parsed_records or stage.native_layouts
+                    or stage.fixture_read[0].target != fixture['id']):
+                return Verdict('failed', ('created-stage-role-or-selector',))
+            immutable = verify_runtime_execution(package, execution)
+            if immutable.status != 'passed':
+                return immutable
+            created = compare_created_fixture(fixture, package=package, state_bytes=stage.expected_state,
+                                              native_dll_sha256=_dlls(stage.native_library_path))
+            return Verdict(created.status, created.issues, created.data[1:] if created.status == 'passed' else ())
         if isinstance(stage, NativeDeployedStage):
             return assess_native_owned_graph(fixture, package=package, execution=execution,
                 reviewed_tree=stage.reviewed_fixture, state_bytes=stage.expected_state,
@@ -433,6 +455,11 @@ def assess_phase_stages(package: Path, execution: Path, baseline: DeployedStage,
             if result.status != "passed":
                 return Verdict(result.status, ("phase-stage:" + str(number), *result.issues))
             current_fields, stable = result.data
+            if number == 0 and isinstance(stage, NativeDeployedStage):
+                from .drivegate_initial import compare_initial_fields
+                initial = compare_initial_fields(verify_package(package), current_fields)
+                if initial.status != 'passed':
+                    return Verdict(initial.status, ('phase-initial-baseline', *initial.issues))
             if parents and any(stable[k]["id"] != parents[0][k]["id"] for k in stable):
                 return Verdict("failed", ("phase-changed-fixture-identity",))
             fields.append(current_fields)

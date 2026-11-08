@@ -35,7 +35,9 @@ Root全体の値の完全一致は必要ありません。Rootの位置・回転
 
 初回Commandのbaselineは、native全構造の検証後に`drivegate_initial.compare_initial_fields`で封印宣言の全private initialFieldsとも照合します。未使用フラグだけで任意のBefore/Targetを採用しません。採取したCLI0.2.0の`ValueCodec.ColorX`はRGBAだけを設定し、current FrooxEngineの`ToEngine`はnull Profileをenum1（sRGB）として扱うことを実DLLのILで確認しています。初期宣言からこのcodecまでの呼出経路と、実行CLIの同一性の照合は後続preflightに残ります。色のprofileも完全値で検証し、別CLI版/current DLL model不一致ならsource調査が必要です。pureなphase比較APIは、独立に与えたbaselineの比較用途を維持します。
 
-このCommand/reader部分だけで全mutation controller完了とはしません。create-onlyの認証と初回anchor、create/deploy/helper削除/最終cleanupの適用確認と回復、currentHEAD package・fullpreflight・実機0–6は後続です。実機接続前のfullpreflightでは、実行に使うPATH上のCLIの解決先と実versionを記録し、封印した`cliVersion`/SDK/sourceと照合する必要があります。このCommand API単体はCLI実行ファイルのinventoryを認証しません。また、journalのbaseline bindingはstage descriptorとstate bytesのfingerprintであり、raw全体の暗号学的な認証とは呼びません。readerは安定treeを元anchor、module treeを封印layout/modelから作ります。private Valueの型付き現在値は適用状況の分類入力だけであり、phase成功期待は元baselineから生成する必要があります。Root診断やfake CLIの検証をnative成功にしません。
+`drivegate_created.compare_created_fixture`と`CreatedStage`は、module未配備のfixtureだけを別経路で照合します。封印した宣言/current DLLのslot schema・ComponentBase/ValueField/ObjectRoot/AI markerの仕様から全初期値とmetadataを構成し、観測から使うのは所有stateへ結んだ実IDだけです。全slot/component/memberのID重複も拒否します。空roleを一般native graphへ解禁せず、同じraw/session/protected/diff検査と現DLL inventoryを通すCreatedStage専用branchです。native最終phase判定もstage0を宣言初期値へ照合し、genericな旧offline比較は維持します。
+
+このCommand/reader/created比較だけで全mutation controller完了とはしません。初回anchorの実採取、create/deploy/helper削除/最終cleanupの適用確認と回復、currentHEAD package・fullpreflight・実機0–6は後続です。実機接続前のfullpreflightでは、実行に使うPATH上のCLIの解決先と実versionを記録し、封印した`cliVersion`/SDK/sourceと照合する必要があります。このCommand API単体はCLI実行ファイルのinventoryを認証しません。また、journalのbaseline bindingはstage descriptorとstate bytesのfingerprintであり、raw全体の暗号学的な認証とは呼びません。readerは安定treeを元anchor、module treeを封印layout/modelから作ります。private Valueの型付き現在値は適用状況の分類入力だけであり、phase成功期待は元baselineから生成する必要があります。Root診断やfake CLIの検証をnative成功にしません。
 
 ### 短い native Drive gate のオフライン準備
 
@@ -68,6 +70,6 @@ package は CLI / SDK の版、DLL 一式の SHA-256 による識別情報、準
 
 `compare_native_runtime` は全構造の合格後だけ、BSON の runtime 意味検査へ接続します。除くことができるのは、すでに全構造で検証した独立既定値の member だけです。passive metadata の無条件除外で件数を合わせません。pure 比較への入力の出所は呼出側が保証する必要があります。実行側は `drivegate_runtime.assess_native_owned_graph` と `NativeDeployedStage` を使い、元の layout/BSON receipt、同じ package、現在の DLL、所有 state、private field を結びます。従来の `assess_owned_graph` / `DeployedStage` は旧オフライン検査用であり、現在の native gate の代用にしません。
 
-この照合器のオフライン検証やモデルから作ったサンプルの一致は、実機照合に成功した証拠ではありません。Root診断とprivate Command部分の接続とは別に、create/deploy/削除を含む全mutation controller、現在HEADの新package、実機の全phase・復元・cleanupは未完了です。
+この照合器のオフライン検証やモデルから作ったサンプルの一致は、実機照合に成功した証拠ではありません。Root診断とprivate Command部分の接続とは別に、create/deploy/削除の実行を含む全mutation controller、現在HEADの新package、実機の全phase・復元・cleanupは未完了です。
 
 この API は live 入口に接続しません。ビルド成功や Done だけで native 成功にはせず、`nativeSucceeded` / `complete` / `executionPermission` は常に false です。実機の保全、完全 preflight、各 phase の readback 判定は後続作業です。この短い gate は S4 全体や C9 / C30 / C23 / C31 の合格ではありません。
