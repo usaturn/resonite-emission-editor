@@ -7,6 +7,7 @@ All successful Verdicts retain complete/executionPermission/nativeSucceeded=fals
 """
 from datetime import UTC, datetime
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -55,16 +56,76 @@ def _inputs(package, library, sdk):
 def _paths(package, module, directory, library, sdk):
     _bindings(module)
     package, directory, library, sdk = [Path(p).absolute() for p in (package, directory, library, sdk)]
-    for path in (package, directory, library, sdk, EXPORTER):
+    execution = Path(verify_package(package)["executionRoot"]).absolute()
+    for path in (package, directory, library, sdk, execution, EXPORTER):
+        if ".." in path.parts:
+            raise ValueError("native-layout-parent-traversal")
         _no_links(path)
-    execution = Path(verify_package(package)["executionRoot"])
     for source in (package, execution, REPO_ROOT, library, sdk):
         if directory.is_relative_to(source) or source.is_relative_to(directory):
             raise ValueError("native-layout-output-overlaps-input")
-    argv = ["dotnet", "run", "--project", str(directory / "tool" / "NativeLayout.fsproj"),
-            "-p:SdkDirectory=" + str(sdk), "--", str(directory / "sources"), module,
+    argv = ["dotnet", "run", "--no-restore", "--project", str(directory / "tool" / "NativeLayout.fsproj"),
+            *_build_properties(sdk), "--", str(directory / "sources"), module,
             str(library), str(directory / "bindings.json"), str(directory / "layout.json")]
     return package, directory, library, sdk, argv
+
+
+def _build_properties(sdk):
+    return ["-p:SdkDirectory=" + str(sdk), "-p:ImportDirectoryBuildProps=false",
+            "-p:ImportDirectoryBuildTargets=false", "-p:ManagePackageVersionsCentrally=false",
+            "-p:NuGetAudit=false"]
+
+
+def _environment(directory):
+    # MSBuild promotes arbitrary environment names to build properties. A deny
+    # list is insufficient; do not inherit compiler/startup hooks or credentials.
+    return {**{k: os.environ[k] for k in ("PATH", "HOME") if k in os.environ},
+            "LANG": "C.UTF-8", "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1",
+            "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1", "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false",
+            "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE": "true",
+            "DOTNET_CLI_HOME": str(directory / "dotnet-home"),
+            "NUGET_PACKAGES": str(directory / "nuget-packages"),
+            "NUGET_HTTP_CACHE_PATH": str(directory / "nuget-http"), "TMPDIR": str(directory / "temp")}
+
+
+def _build_context(directory):
+    # Record SDK selection/ancestor build inputs as provenance, not as an
+    # attestation against a malicious SDK. Directory imports are also disabled.
+    result = {}
+    for parent in (directory / "tool", directory, *directory.parents):
+        for name in ("global.json", "Directory.Build.props", "Directory.Build.targets",
+                     "Directory.Packages.props", "NuGet.Config", "MSBuild.rsp"):
+            path = parent / name
+            _no_links(path)
+            if path.exists():
+                result[str(path)] = _hash(path)
+    return result
+
+
+def _commands(directory, sdk, argv):
+    return [("toolchain", ["dotnet", "--info"]),
+            ("restore", ["dotnet", "restore", str(directory / "tool" / "NativeLayout.fsproj"),
+                         "--configfile", str(directory / "NuGet.Config"), *_build_properties(sdk)]),
+            ("run", argv)]
+
+
+def _run_commands(directory, commands, environment):
+    results = []
+    for label, argv in commands:
+        launch_error = None
+        try:
+            process = subprocess.run(argv, cwd=directory, env=environment, stdin=subprocess.DEVNULL,
+                                     capture_output=True, check=False)
+            stdout, stderr, code = process.stdout, process.stderr, process.returncode
+        except OSError as exc:
+            stdout, stderr, code, launch_error = b"", str(exc).encode(), None, str(exc)
+        prefix = "" if label == "run" else label + "."
+        _write_new(directory / (prefix + "stdout.bin"), stdout)
+        _write_new(directory / (prefix + "stderr.bin"), stderr)
+        results.append({"stage": label, "argv": argv, "exitCode": code, "launchError": launch_error})
+        if code != 0 or launch_error is not None:
+            break
+    return results
 
 
 def _validate_document(document, module, sdk_version):
@@ -145,22 +206,22 @@ def collect_native_layout(package: Path, module: str, directory: Path, *,
         for name in before["sources"]:
             shutil.copyfile(package / "sources" / name, directory / "sources" / name)
         _write_new(directory / "bindings.json", json.dumps(_bindings(module)).encode())
-        started, launch_error = datetime.now(UTC).isoformat(), None
-        try:
-            process = subprocess.run(argv, cwd=directory, stdin=subprocess.DEVNULL, capture_output=True, check=False)
-            stdout, stderr, code = process.stdout, process.stderr, process.returncode
-        except OSError as exc:
-            stdout, stderr, code, launch_error = b"", str(exc).encode(), None, str(exc)
+        _write_new(directory / "NuGet.Config", b'<configuration><packageSources><clear /></packageSources></configuration>')
+        (directory / "temp").mkdir()
+        environment, context_before = _environment(directory), _build_context(directory)
+        started = datetime.now(UTC).isoformat()
+        commands = _run_commands(directory, _commands(directory, sdk, argv), environment)
         finished = datetime.now(UTC).isoformat()
-        _write_new(directory / "stdout.bin", stdout)
-        _write_new(directory / "stderr.bin", stderr)
         try:
-            after, after_error = _inputs(package, library, sdk), None
+            after, context_after, after_error = _inputs(package, library, sdk), _build_context(directory), None
         except (OSError, ValueError, KeyError) as exc:
-            after, after_error = None, str(exc)
+            after, context_after, after_error = None, None, str(exc)
         receipt = {"module": module, "package": str(package), "library": str(library), "sdk": str(sdk),
-                   "argv": argv, "startedAt": started, "finishedAt": finished, "exitCode": code,
-                   "launchError": launch_error, "inputsBefore": before, "inputsAfter": after,
+                   "argv": argv, "startedAt": started, "finishedAt": finished,
+                   "exitCode": commands[-1]["exitCode"], "launchError": commands[-1]["launchError"],
+                   "commands": commands, "environment": environment,
+                   "buildContextBefore": context_before, "buildContextAfter": context_after,
+                   "inputsBefore": before, "inputsAfter": after,
                    "afterError": after_error, "files": _files(directory)}
         _write_new(directory / "receipt.json", json.dumps(receipt, ensure_ascii=False, indent=2).encode())
         return load_native_layout(package, module, directory, library_path=library, sdk_directory=sdk)
@@ -182,9 +243,19 @@ def load_native_layout(package: Path, module: str, directory: Path, *,
             raise ValueError("native-layout-producer-failed")
         if receipt["inputsBefore"] != current or receipt["inputsAfter"] != current or receipt["afterError"] is not None:
             raise ValueError("native-layout-input-changed")
+        expected_commands = [{"stage": label, "argv": args, "exitCode": 0, "launchError": None}
+                             for label, args in _commands(directory, sdk, argv)]
+        if (receipt["commands"] != expected_commands
+                or any(type(command["exitCode"]) is not int for command in receipt["commands"])
+                or receipt["environment"] != _environment(directory)
+                or receipt["buildContextBefore"] != _build_context(directory)
+                or receipt["buildContextAfter"] != receipt["buildContextBefore"]):
+            raise ValueError("native-layout-build-context")
         files = _files(directory)
         files.pop("receipt.json")
-        if not {"stdout.bin", "stderr.bin", "layout.json", "bindings.json"} <= files.keys():
+        required = {"stdout.bin", "stderr.bin", "layout.json", "bindings.json", "NuGet.Config",
+                    "toolchain.stdout.bin", "toolchain.stderr.bin", "restore.stdout.bin", "restore.stderr.bin"}
+        if not required <= files.keys():
             raise ValueError("native-layout-missing-original-output")
         if files != receipt["files"]:
             raise ValueError("native-layout-artifact-changed")

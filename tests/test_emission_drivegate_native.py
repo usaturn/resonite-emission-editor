@@ -23,13 +23,21 @@ def setup_inputs(root, monkeypatch):
     executable = root / "dotnet"
     executable.write_text(f"#!{sys.executable}\n" + '''import json, os, pathlib, sys
 args = sys.argv[1:]
-assert args[:2] == ['run', '--project'] and '--' in args
+if args == ['--info']:
+ print('fake toolchain 1'); sys.exit(0)
+if args[0] == 'restore':
+ print('offline restore'); sys.exit(0)
+assert args[0] == 'run' and '--' in args
 project, module, library, bindings, output = args[args.index('--')+1:]
 assert pathlib.Path(project, module+'.pg').read_text() == 'module '+module
 assert json.loads(pathlib.Path(bindings).read_text()) == {'inputs':{},'outputs':{'Driven':'private:Driven'}}
-pathlib.Path(output).write_text(os.environ['FAKE_NATIVE_LAYOUT'])
+config = json.loads(pathlib.Path(__file__).with_name('fake-config.json').read_text())
+doc = config['document']
+if os.environ.get('MSBuildSDKsPath') or os.environ.get('DOTNET_STARTUP_HOOKS'):
+ doc['operations'][1]['data']['componentType'] = 'environment-substituted-proxy'
+pathlib.Path(output).write_text(json.dumps(doc))
 print('offline-export')
-sys.exit(int(os.environ.get('FAKE_NATIVE_EXIT', '0')))
+sys.exit(config.get('exitCode', 0))
 ''')
     executable.chmod(0o700)
     monkeypatch.setenv("PATH", str(root) + os.pathsep + os.environ["PATH"])
@@ -40,7 +48,7 @@ sys.exit(int(os.environ.get('FAKE_NATIVE_EXIT', '0')))
         {"operation": "AddComponent", "containerSlotId": "module", "data": {
             "id": "proxy", "componentType": "test-proxy", "members": {
                 "Drive": {"$type": "reference", "id": "drive-member", "targetId": "private:Driven"}}}}]}
-    monkeypatch.setenv("FAKE_NATIVE_LAYOUT", json.dumps(document))
+    (root / "fake-config.json").write_text(json.dumps({"document": document}))
     return package, library, sdk, document
 
 
@@ -80,14 +88,38 @@ def test_existing_or_input_destination_is_never_overwritten(tmp_path, monkeypatc
     assert (package / "sources" / "BoolDrive.pg").read_bytes() == original_source
 
 
+def test_dotdot_destination_cannot_write_inside_protected_execution(tmp_path, monkeypatch):
+    # S: a lexical spelling must not bypass the no-foreign-write boundary.
+    package, library, sdk, _ = setup_inputs(tmp_path, monkeypatch)
+    (tmp_path / "prefix").mkdir()
+    destination = tmp_path / "prefix" / ".." / "execution" / "pollution"
+    assert collect(package, library, sdk, tmp_path / "allowed").status == "passed"
+    assert collect(package, library, sdk, destination).status != "passed"
+    assert not (tmp_path / "execution" / "pollution").exists()
+
+
 def test_nonzero_export_cannot_be_reported_success_even_with_complete_output(tmp_path, monkeypatch):
     # S: output existence is not evidence of a successful producer run.
     package, library, sdk, _ = setup_inputs(tmp_path, monkeypatch)
-    monkeypatch.setenv("FAKE_NATIVE_EXIT", "7")
+    config = tmp_path / "fake-config.json"
+    data = json.loads(config.read_bytes())
+    data["exitCode"] = 7
+    config.write_text(json.dumps(data))
     result = collect(package, library, sdk, tmp_path / "capture")
     assert result.status != "passed"
     receipt = json.loads((tmp_path / "capture" / "receipt.json").read_bytes())
     assert receipt["exitCode"] == 7
+
+
+def test_build_environment_cannot_substitute_compiler_or_startup_hook(tmp_path, monkeypatch):
+    # S: inherited MSBuild/.NET code injection must not produce plausible but
+    # different evidence from the same hashed exporter sources.
+    package, library, sdk, _ = setup_inputs(tmp_path, monkeypatch)
+    monkeypatch.setenv("MSBuildSDKsPath", "/untrusted/compiler")
+    monkeypatch.setenv("DOTNET_STARTUP_HOOKS", "/untrusted/hook.dll")
+    result = collect(package, library, sdk, tmp_path / "isolated")
+    assert result.status == "passed", result.issues
+    assert result.data[0]["operations"][1]["data"]["componentType"] == "test-proxy"
 
 
 def test_export_rejects_foreign_reference_and_wrong_native_library(tmp_path, monkeypatch):
@@ -96,9 +128,9 @@ def test_export_rejects_foreign_reference_and_wrong_native_library(tmp_path, mon
     assert collect(package, library, sdk, tmp_path / "valid").status == "passed"
     foreign = deepcopy(document)
     foreign["operations"][1]["data"]["members"]["Drive"]["targetId"] = "another-panel"
-    monkeypatch.setenv("FAKE_NATIVE_LAYOUT", json.dumps(foreign))
+    (tmp_path / "fake-config.json").write_text(json.dumps({"document": foreign}))
     assert collect(package, library, sdk, tmp_path / "foreign").status != "passed"
-    monkeypatch.setenv("FAKE_NATIVE_LAYOUT", json.dumps(document))
+    (tmp_path / "fake-config.json").write_text(json.dumps({"document": document}))
     (library / "test.dll").write_bytes(b"wrong-native-library")
     assert collect(package, library, sdk, tmp_path / "wrong-library").status != "passed"
     assert not (tmp_path / "wrong-library").exists()
