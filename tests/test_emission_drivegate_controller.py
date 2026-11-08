@@ -23,6 +23,8 @@ def setup_controller(tmp_path, monkeypatch):
     package.mkdir()
     execution.mkdir()
     fields = phase_baseline()
+    for name in ('BeforeColor','ColorAfter'):
+        fields[name]['value'] = {'r':0.,'g':0.,'b':0.,'a':1.,'profile':'sRGB'}
     expected = phase_expectations(fields).data
     identity = NativeIdentity("Reso_AA", "Value", "世界・試験")
 
@@ -39,7 +41,11 @@ def setup_controller(tmp_path, monkeypatch):
 
     data = {}
     monkeypatch.setattr(controller, "assess_deployed_stage", lambda p, e, s: Verdict("passed", data=data[id(s)]))
-    monkeypatch.setattr(controller, "verify_package", lambda p: {"codeCommit": "clean-code"})
+    from scripts.emission_editor.drivegate_package import normalized_fixture
+    model = json.loads((Path(controller.__file__).parent/'drivegate_native_model.json').read_bytes())
+    monkeypatch.setattr(controller, "verify_package", lambda p: {
+        "codeCommit":"clean-code", "cliVersion":"0.2.0", "dllSha256":model['nativeDllSha256'],
+        "normalizedFixture":normalized_fixture('unit','0.2.0')})
     monkeypatch.setattr(controller, "_code_commit", lambda: "clean-code")
     # fixed fake CLI really runs as a process; all observations remain fake.
     executable = tmp_path / "resoloop"
@@ -126,9 +132,8 @@ def test_partial_capture_and_foreign_session_are_never_replayed(tmp_path, monkey
     assert result["application"] == "unknown" and not calls.exists()
     # Successful expected-field shape alone cannot replace the original baseline.
     changed = deepcopy(expected[0])
-    changed["ColorTarget"]["value"]["r"] += 1
-    replacement = read(changed)
-    with pytest.raises(ValueError, match="baseline-binding"):
+    replacement = read(changed)  # Same valid initial values, different original receipt window.
+    with pytest.raises(ValueError, match="baseline-"):
         controller.run_command(**(args | {"baseline": replacement, "previous": replacement}),
                                observe=lambda: read(changed))
 

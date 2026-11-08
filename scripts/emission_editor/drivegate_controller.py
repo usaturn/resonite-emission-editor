@@ -19,6 +19,7 @@ import time
 
 from .drivegate_evidence import compare_subtree, compare_typed, phase_expectations
 from .drivegate_package import _code_commit, _no_links, verify_package
+from .drivegate_initial import compare_initial_fields
 from .drivegate_runtime import NativeDeployedStage, assess_deployed_stage
 from .read_receipts import ReadRequest, _write_new
 
@@ -127,6 +128,8 @@ def run_command(*, package: Path, execution: Path, baseline: NativeDeployedStage
         if seal["codeCommit"] != _code_commit():
             raise ValueError("command-current-clean-code-required")
         base_fields, base_stable = _checked(package, execution, baseline)
+        if compare_initial_fields(seal, base_fields).status != "passed":
+            raise ValueError("command-baseline-not-declared-initial")
         old_fields, old_stable = _checked(package, execution, previous)
         expectations = phase_expectations(base_fields)
         if expectations.status != "passed" or baseline.roles != ("probe",):
