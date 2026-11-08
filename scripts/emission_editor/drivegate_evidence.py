@@ -491,6 +491,25 @@ def compare_phase_sequence(baseline: dict, phases: list[tuple[int, dict]]) -> Ve
     Re-capture refusal still requires a separate native attempt/observation.
     This never labels a simulated input as native success or writes a command.
     """
+    expected = phase_expectations(baseline)
+    if expected.status != "passed":
+        return expected
+    if len(phases) != 6:
+        return Verdict("inconclusive", ("missing:phase-sequence",))
+    for index, (number, observed) in enumerate(phases, 1):
+        if type(number) is not int or number != index:
+            return Verdict("inconclusive", ("missing:ordered-phase:" + str(index),))
+        if not isinstance(observed, dict) or set(observed) != set(_PHASE_TYPES):
+            return Verdict("inconclusive", ("missing:phase-fields:" + str(index),))
+        for name, member in expected.data[index].items():
+            result = compare_typed(member, observed[name])
+            if result.status != "passed":
+                return Verdict(result.status, ("phase:" + str(index) + ":" + name, *result.issues))
+    return Verdict("passed")
+
+
+def phase_expectations(baseline: dict) -> Verdict:
+    """Fixed 0..6 expectations from an unused baseline, never observed outcomes."""
     from copy import deepcopy
     if not isinstance(baseline, dict) or set(baseline) != set(_PHASE_TYPES):
         return Verdict("inconclusive", ("missing:baseline-fields",))
@@ -516,13 +535,8 @@ def compare_phase_sequence(baseline: dict, phases: list[tuple[int, dict]]) -> Ve
         return Verdict("failed", ("baseline-capture-or-restoration-unobservable",))
     wanted = [(original_color, original_bool, 0, 0), (a, True, 1, 1), (a, True, 2, 2),
               (b, True, 1, 2), (c, False, 1, 1), (original_color, original_bool, 1, 1)]
-    if len(phases) != 6:
-        return Verdict("inconclusive", ("missing:phase-sequence",))
-    for index, (number, observed) in enumerate(phases, 1):
-        if type(number) is not int or number != index:
-            return Verdict("inconclusive", ("missing:ordered-phase:" + str(index),))
-        if not isinstance(observed, dict) or set(observed) != set(_PHASE_TYPES):
-            return Verdict("inconclusive", ("missing:phase-fields:" + str(index),))
+    phases = [deepcopy(baseline)]
+    for index in range(1, 7):
         expected = deepcopy(baseline)
         col, boolean, co, bo = wanted[index - 1]
         changes = {"Command": index, "Done": index, "Captured": True, "BeforeColor": original_color,
@@ -530,11 +544,8 @@ def compare_phase_sequence(baseline: dict, phases: list[tuple[int, dict]]) -> Ve
                    "BoolTarget": boolean, "BoolAfter": boolean, "ColorOutcome": co, "BoolOutcome": bo}
         for name, value in changes.items():
             expected[name]["value"] = deepcopy(value)
-        for name in expected:
-            result = compare_typed(expected[name], observed[name])
-            if result.status != "passed":
-                return Verdict(result.status, ("phase:" + str(index) + ":" + name, *result.issues))
-    return Verdict("passed")
+        phases.append(expected)
+    return Verdict("passed", data=tuple(phases))
 
 
 _RUNTIME_PREFIXES = ("[ProtoFluxBindings]", "[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<",
