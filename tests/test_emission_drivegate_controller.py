@@ -133,7 +133,7 @@ def test_partial_capture_and_foreign_session_are_never_replayed(tmp_path, monkey
     # Successful expected-field shape alone cannot replace the original baseline.
     changed = deepcopy(expected[0])
     replacement = read(changed)  # Same valid initial values, different original receipt window.
-    with pytest.raises(ValueError, match="baseline-"):
+    with pytest.raises(ValueError, match="command-baseline-binding-changed"):
         controller.run_command(**(args | {"baseline": replacement, "previous": replacement}),
                                observe=lambda: read(changed))
 
