@@ -34,4 +34,6 @@ package は CLI / SDK の版、DLL 一式の SHA-256 による識別情報、準
 
 `DriveGateProbe.pg` は host-only の Command 入口を 1 つだけ持ちます。0 は no-op、1 は元の完全色と bool を一度だけ保存、2 は A / true、3 と 4 は B / false、5 は C / false、6 は保存した値の native 復元です。A / C は HDR・Linear・非 1 alpha、B は別の RGBA / sRGB です。対象の書き込みは mutable port を使い、OnWritten=1 / OnFail=2 を色と bool で別々に記録し、完全色と bool の readback 後に Done を更新します。2–6 は capture 前には動きません。ColorDrive / BoolDrive は eventless で A / true を Drive するだけです。helper の所有確認・削除・実機観測はここでは行いません。
 
+保全用の全 subtree 比較では、installed CLI の名前付き非有限値（JSON文字列の `Infinity` / `-Infinity` / `NaN`）、完全な RGBA と非空 profile 文字列、既知の `Array_float3` / `Array_floatQ` の全要素・軸・内外 ID を失わずに照合します。これらは保全専用であり、private writer の有限値・Linear / sRGB 判定を広げません。未知 kind、欠落、不完全な配列を一致扱いにはしません。
+
 この API は live 入口に接続しません。ビルド成功や Done だけで native 成功にはせず、`nativeSucceeded` / `complete` / `executionPermission` は常に false です。実機の保全、完全 preflight、各 phase の readback 判定は後続作業です。この短い gate は S4 全体や C9 / C30 / C23 / C31 の合格ではありません。

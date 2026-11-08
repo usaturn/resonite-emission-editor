@@ -458,6 +458,41 @@ def test_protected_opaque_payloads_are_preserved_not_authorized_private_types():
     assert evidence.compare_subtree(before, after).status == "inconclusive"
 
 
+def test_native_wire_scalars_and_profiles_preserve_without_authorizing_writers():
+    # S: dropping nonfinite bounds or alpha-aware profiles loses protected state;
+    # accepting them as ordinary private candidates would widen writer scope.
+    before, after = subtree(), subtree()
+    members = {"Bound": field("System.Single", "Infinity", "Reso_FA"),
+               "Color": field("ResoniteLink.colorX", {
+                   "r": 2.0, "g": .5, "b": 1.25, "a": .375, "profile": "sRGBAlpha"}, "Reso_FB")}
+    before["members"], after["members"] = deepcopy(members), deepcopy(members)
+    assert evidence.compare_subtree(before, after).status == "passed"
+    for member in members.values():
+        assert evidence.compare_typed(member, deepcopy(member)).status == "inconclusive"
+    after["members"]["Bound"]["value"] = "-Infinity"
+    assert evidence.compare_subtree(before, after).status == "failed"
+    after["members"] = deepcopy(members)
+    after["members"]["Color"]["value"]["profile"] = "sRGB"
+    assert evidence.compare_subtree(before, after).status == "failed"
+
+
+def test_known_native_array_preserves_all_axes_and_requires_complete_payload():
+    # S: an identity-only or filtered array can conceal changed avatar defaults.
+    # This known wire kind remains preservation-only, not a private writer type.
+    before, after = subtree(), subtree()
+    array = {"kind": "Array_floatQ", "id": "Reso_FC", "value": {
+        "id": "Reso_FC", "values": [{"x": 0, "y": .25, "z": 0, "w": .75}]}}
+    before["members"], after["members"] = {"Rotations": deepcopy(array)}, {"Rotations": deepcopy(array)}
+    assert evidence.compare_subtree(before, after).status == "passed"
+    assert evidence.compare_typed(array, deepcopy(array)).status == "inconclusive"
+    after["members"]["Rotations"]["value"]["values"][0]["w"] = .5
+    assert evidence.compare_subtree(before, after).status == "failed"
+    after["members"]["Rotations"] = deepcopy(array)
+    del before["members"]["Rotations"]["value"]["id"]
+    del after["members"]["Rotations"]["value"]["id"]
+    assert evidence.compare_subtree(before, after).status == "inconclusive"
+
+
 def test_slot_numeric_shapes_preserve_every_axis_and_int64_without_bool_coercion():
     # S: dropping quaternion w, coercing bool or rounding a large OrderOffset
     # can report a changed protected slot as unchanged.

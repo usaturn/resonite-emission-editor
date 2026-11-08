@@ -95,6 +95,33 @@ def _json_value(value):
     return False
 
 
+def _wire_real(value):
+    # Installed ModelMapper/OutputWriter encode named nonfinite floats as strings.
+    return _real(value) or (type(value) is str and value in ("Infinity", "-Infinity", "NaN"))
+
+
+def _preservable_field(typ, value):
+    if typ in ("System.Single", "System.Double"):
+        return type(value) is str and _wire_real(value)
+    # ResoniteLink.colorX.Profile is a string carrier, not a writer enum. Retain
+    # complete unfamiliar profiles without interpreting/authorizing their use.
+    return (typ == "ResoniteLink.colorX" and not _value(typ, value) and isinstance(value, dict)
+            and value.keys() == {"r", "g", "b", "a", "profile"}
+            and all(_wire_real(value[k]) for k in ("r", "g", "b", "a"))
+            and isinstance(value["profile"], str) and bool(value["profile"]))
+
+
+def _complete_array(member):
+    # These exact known ResoniteLink classes take ModelMapper's serialized
+    # fallback, carrying Values plus inherited ID, rather than SyncList members.
+    value = member["value"]
+    axes = {"x", "y", "z", "w"} if member["kind"] == "Array_floatQ" else {"x", "y", "z"}
+    return (isinstance(value, dict) and value.keys() == {"id", "values"}
+            and value["id"] == member["id"] and isinstance(value["values"], list)
+            and all(isinstance(v, dict) and v.keys() == axes
+                    and all(_wire_real(n) for n in v.values()) for v in value["values"]))
+
+
 def _compare_opaque(expected, actual):
     # Preservation ONLY: exact complete JSON, not domain/writer authorization.
     if not _json_value(expected) or not _json_value(actual):
@@ -132,6 +159,8 @@ def _compare_member(expected: dict, actual: dict, *, preservation: bool) -> Verd
         pass  # MapMember(Link.EmptyElement) emits only kind/id; preserve identity.
     elif kind == "SyncPlayback" and preservation:
         required |= {"type", "value"}
+    elif kind in ("Array_float3", "Array_floatQ") and preservation:
+        required |= {"value"}
     elif kind == "reference":
         # ResoLoop 0.2.0 maps every present reference; WhenWritingNull omits
         # targetId for a known null. Never normalize an absent/unidentified member.
@@ -152,7 +181,7 @@ def _compare_member(expected: dict, actual: dict, *, preservation: bool) -> Verd
         return Verdict("inconclusive", ("missing:expected-member-id",))
     if expected.keys() != actual.keys():
         return Verdict("failed", ("member-field-set",))
-    skip = {"value"} if kind in ("field", "SyncPlayback") else {"members"} if kind in ("syncObject", "dictionary") else {"elements"} if kind == "list" else set()
+    skip = {"value"} if kind in ("field", "SyncPlayback", "Array_float3", "Array_floatQ") else {"members"} if kind in ("syncObject", "dictionary") else {"elements"} if kind == "list" else set()
     if any(not _strict_equal(v, actual[k]) for k, v in expected.items() if k not in skip):
         return Verdict("failed", ("member-identity-or-type",))
     if kind == "field":
@@ -161,7 +190,7 @@ def _compare_member(expected: dict, actual: dict, *, preservation: bool) -> Verd
             return Verdict("inconclusive", ("missing:field-type",))
         known = typ in ("System.Boolean", "System.Int32", "System.Int64", "System.Single", "System.Double",
                         "System.String", "ResoniteLink.colorX", "ResoniteLink.float3", "ResoniteLink.floatQ")
-        if preservation and not known:
+        if preservation and (not known or _preservable_field(typ, expected["value"])):
             return _compare_opaque(expected["value"], actual["value"])
         if not _value(typ, expected["value"]):
             return Verdict("inconclusive", ("missing:valid-supported-expectation",))
@@ -171,6 +200,10 @@ def _compare_member(expected: dict, actual: dict, *, preservation: bool) -> Verd
         if (expected["type"] != "[FrooxEngine]FrooxEngine.SyncPlayback"
                 or not isinstance(expected["value"], dict) or not isinstance(actual["value"], dict)):
             return Verdict("inconclusive", ("missing:complete-playback-payload",))
+        return _compare_opaque(expected["value"], actual["value"])
+    elif kind in ("Array_float3", "Array_floatQ"):
+        if not _complete_array(expected):
+            return Verdict("inconclusive", ("missing:complete-known-array",))
         return _compare_opaque(expected["value"], actual["value"])
     elif kind in ("syncObject", "dictionary", "list"):
         key = "elements" if kind == "list" else "members"
