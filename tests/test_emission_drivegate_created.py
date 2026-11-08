@@ -66,3 +66,38 @@ def test_created_scope_rejects_metadata_initial_value_and_global_alias_adoption(
     wrong = deepcopy(tree)
     wrong['members']['unknown'] = field('System.Int32',0,'unknown-id')
     assert created.compare_created_fixture(wrong,**args).status != 'passed'
+
+
+def test_created_stage_cannot_launder_an_unchecked_reader_anchor(tmp_path,monkeypatch):
+    # S: the reader copies reviewed_fixture stable metadata. A correct observed
+    # graph alone must not authenticate a different caller-supplied anchor.
+    from dataclasses import replace
+    import hashlib
+    from scripts.emission_editor import drivegate_native
+    from test_emission_drivegate_runtime import staged_fixture
+    package,execution,old = staged_fixture(tmp_path,monkeypatch)
+    tree,_,model_seal = created_fixture()
+    original = tree['id']
+    tree['id'] = 'Reso_FA'
+    for child in tree['children']:
+        if child['parentId'] == original:
+            child['parentId'] = 'Reso_FA'
+            child['members']['Parent']['targetId'] = 'Reso_FA'
+    # Only package/library authentication is stubbed. Real original read/diff
+    # receipts, ownership and complete created comparator run; no native call.
+    seal = runtime.verify_package(package) | {'dllSha256':model_seal['dllSha256']}
+    monkeypatch.setattr(runtime,'verify_package',lambda p:seal)
+    monkeypatch.setattr(created,'verify_package',lambda p:seal)
+    monkeypatch.setattr(drivegate_native,'_dlls',lambda p:seal['dllSha256'])
+    directory = old.fixture_read[1]
+    raw = json.dumps({'ok':True,'data':tree}).encode()
+    (directory/'stdout.bin').write_bytes(raw)
+    receipt = json.loads((directory/'receipt.json').read_bytes())
+    receipt['stdoutSha256'] = hashlib.sha256(raw).hexdigest()
+    (directory/'receipt.json').write_text(json.dumps(receipt))
+    stage = runtime.CreatedStage(**(vars(old)|{'roles':(),'parsed_records':{},'reviewed_fixture':tree}),
+            native_layouts={},native_library_path=tmp_path/'lib',native_sdk_directory=tmp_path/'sdk')
+    assert runtime.assess_deployed_stage(package,execution,stage).status == 'passed'
+    foreign_anchor = deepcopy(tree)
+    foreign_anchor['components'][0]['members']['Enabled']['value'] = False
+    assert runtime.assess_deployed_stage(package,execution,replace(stage,reviewed_fixture=foreign_anchor)).status != 'passed'

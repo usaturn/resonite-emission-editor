@@ -396,7 +396,12 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
                 return immutable
             created = compare_created_fixture(fixture, package=package, state_bytes=stage.expected_state,
                                               native_dll_sha256=_dlls(stage.native_library_path))
-            return Verdict(created.status, created.issues, created.data[1:] if created.status == 'passed' else ())
+            if created.status != 'passed':
+                return created
+            anchor = compare_subtree(created.data[0], stage.reviewed_fixture)
+            if anchor.status != 'passed':
+                return Verdict(anchor.status, ('created-reviewed-fixture', *anchor.issues))
+            return Verdict('passed', data=created.data[1:])
         if isinstance(stage, NativeDeployedStage):
             return assess_native_owned_graph(fixture, package=package, execution=execution,
                 reviewed_tree=stage.reviewed_fixture, state_bytes=stage.expected_state,
