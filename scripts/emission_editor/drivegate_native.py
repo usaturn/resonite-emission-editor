@@ -64,16 +64,20 @@ def _paths(package, module, directory, library, sdk):
     for source in (package, execution, REPO_ROOT, library, sdk):
         if directory.is_relative_to(source) or source.is_relative_to(directory):
             raise ValueError("native-layout-output-overlaps-input")
-    argv = ["dotnet", "run", "--no-restore", "--project", str(directory / "tool" / "NativeLayout.fsproj"),
-            *_build_properties(sdk), "--", str(directory / "sources"), module,
-            str(library), str(directory / "bindings.json"), str(directory / "layout.json")]
+    argv = ["dotnet", str(directory / "tool" / "bin" / "Debug" / "net10.0" / "NativeLayout.dll"),
+            str(directory / "sources"), module, str(library),
+            str(directory / "bindings.json"), str(directory / "layout.json")]
     return package, directory, library, sdk, argv
 
 
 def _build_properties(sdk):
     return ["-p:SdkDirectory=" + str(sdk), "-p:ImportDirectoryBuildProps=false",
             "-p:ImportDirectoryBuildTargets=false", "-p:ManagePackageVersionsCentrally=false",
-            "-p:NuGetAudit=false"]
+            "-p:NuGetAudit=false", "-p:Configuration=Debug", "-p:UseSharedCompilation=false",
+            "-p:ImportUserLocationsByWildcardBeforeMicrosoftCommonProps=false",
+            "-p:ImportUserLocationsByWildcardAfterMicrosoftCommonProps=false",
+            "-p:ImportUserLocationsByWildcardBeforeMicrosoftCommonTargets=false",
+            "-p:ImportUserLocationsByWildcardAfterMicrosoftCommonTargets=false"]
 
 
 def _environment(directory):
@@ -94,7 +98,7 @@ def _build_context(directory):
     result = {}
     for parent in (directory / "tool", directory, *directory.parents):
         for name in ("global.json", "Directory.Build.props", "Directory.Build.targets",
-                     "Directory.Packages.props", "NuGet.Config", "MSBuild.rsp"):
+                     "Directory.Packages.props", "NuGet.Config", "MSBuild.rsp", "Directory.Build.rsp"):
             path = parent / name
             _no_links(path)
             if path.exists():
@@ -103,10 +107,13 @@ def _build_context(directory):
 
 
 def _commands(directory, sdk, argv):
+    # Use MSBuild directly: unlike dotnet run, its -noAutoResponse is an explicit
+    # documented switch. Execute the built DLL separately, never rebuild at run.
+    build = ["dotnet", "msbuild", str(directory / "tool" / "NativeLayout.fsproj"),
+             "-noAutoResponse", "-nodeReuse:false", *_build_properties(sdk)]
     return [("toolchain", ["dotnet", "--info"]),
-            ("restore", ["dotnet", "restore", str(directory / "tool" / "NativeLayout.fsproj"),
-                         "--configfile", str(directory / "NuGet.Config"), *_build_properties(sdk)]),
-            ("run", argv)]
+            ("restore", [*build, "-target:Restore", "-p:RestoreConfigFile=" + str(directory / "NuGet.Config")]),
+            ("build", [*build, "-target:Build"]), ("run", argv)]
 
 
 def _run_commands(directory, commands, environment):
@@ -254,7 +261,8 @@ def load_native_layout(package: Path, module: str, directory: Path, *,
         files = _files(directory)
         files.pop("receipt.json")
         required = {"stdout.bin", "stderr.bin", "layout.json", "bindings.json", "NuGet.Config",
-                    "toolchain.stdout.bin", "toolchain.stderr.bin", "restore.stdout.bin", "restore.stderr.bin"}
+                    "toolchain.stdout.bin", "toolchain.stderr.bin", "restore.stdout.bin", "restore.stderr.bin",
+                    "build.stdout.bin", "build.stderr.bin"}
         if not required <= files.keys():
             raise ValueError("native-layout-missing-original-output")
         if files != receipt["files"]:

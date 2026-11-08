@@ -25,15 +25,21 @@ def setup_inputs(root, monkeypatch):
 args = sys.argv[1:]
 if args == ['--info']:
  print('fake toolchain 1'); sys.exit(0)
-if args[0] == 'restore':
- print('offline restore'); sys.exit(0)
-assert args[0] == 'run' and '--' in args
-project, module, library, bindings, output = args[args.index('--')+1:]
+if args[0] in ('restore', 'run', 'msbuild') and '-noAutoResponse' not in args:
+ if any((p/'Directory.Build.rsp').exists() for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]):
+  pathlib.Path('fake-poison').write_text('ancestor changed compiler')
+if args[0] in ('restore', 'msbuild'):
+ print('offline build stage'); sys.exit(0)
+if args[0] == 'run':
+ project, module, library, bindings, output = args[args.index('--')+1:]
+else:
+ assert args[0].endswith('NativeLayout.dll')
+ project, module, library, bindings, output = args[1:]
 assert pathlib.Path(project, module+'.pg').read_text() == 'module '+module
 assert json.loads(pathlib.Path(bindings).read_text()) == {'inputs':{},'outputs':{'Driven':'private:Driven'}}
 config = json.loads(pathlib.Path(__file__).with_name('fake-config.json').read_text())
 doc = config['document']
-if os.environ.get('MSBuildSDKsPath') or os.environ.get('DOTNET_STARTUP_HOOKS'):
+if os.environ.get('MSBuildSDKsPath') or os.environ.get('DOTNET_STARTUP_HOOKS') or pathlib.Path('fake-poison').exists():
  doc['operations'][1]['data']['componentType'] = 'environment-substituted-proxy'
 pathlib.Path(output).write_text(json.dumps(doc))
 print('offline-export')
@@ -117,6 +123,16 @@ def test_build_environment_cannot_substitute_compiler_or_startup_hook(tmp_path, 
     package, library, sdk, _ = setup_inputs(tmp_path, monkeypatch)
     monkeypatch.setenv("MSBuildSDKsPath", "/untrusted/compiler")
     monkeypatch.setenv("DOTNET_STARTUP_HOOKS", "/untrusted/hook.dll")
+    result = collect(package, library, sdk, tmp_path / "isolated")
+    assert result.status == "passed", result.issues
+    assert result.data[0]["operations"][1]["data"]["componentType"] == "test-proxy"
+
+
+def test_ancestor_response_file_cannot_change_built_exporter(tmp_path, monkeypatch):
+    # S: automatic response-file properties are a separate input channel from
+    # environment properties; the fake compiler makes their influence observable.
+    package, library, sdk, _ = setup_inputs(tmp_path, monkeypatch)
+    (tmp_path / "Directory.Build.rsp").write_text("-p:Untrusted=true\n")
     result = collect(package, library, sdk, tmp_path / "isolated")
     assert result.status == "passed", result.issues
     assert result.data[0]["operations"][1]["data"]["componentType"] == "test-proxy"
