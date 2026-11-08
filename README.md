@@ -53,6 +53,14 @@ cleanupの`compare_embedded_subtree`は、ID inspectのName起点pathと、Root 
 
 このCommand/reader/created比較とbootstrap読取APIだけで全mutation controller完了とはしません。実fixtureでの初回anchor採取、create/deploy/helper削除/最終cleanupの適用確認と回復、currentHEAD package・fullpreflight・実機0–6は後続です。実機接続前のfullpreflightでは、実行に使うPATH上のCLIの解決先と実versionを記録し、封印した`cliVersion`/SDK/sourceと照合する必要があります。このCommand API単体はCLI実行ファイルのinventoryを認証しません。また、journalのbaseline bindingはstage descriptorとstate bytesのfingerprintであり、raw全体の暗号学的な認証とは呼びません。readerは安定treeを元anchor、module treeを封印layout/modelから作ります。private Valueの型付き現在値は適用状況の分類入力だけであり、phase成功期待は元baselineから生成する必要があります。Root診断やfake CLIの検証をnative成功にしません。
 
+### 固定 create / 最初の probe 配備の内部制御
+
+`drivegate_lifecycle.run_create`と`run_deploy_probe`は、作成と最初のprobe配備だけを固定操作として実行します。Commandと同じexecution journal・writer lock・run-N・launch intent・process group終了確認を共有し、元scope/created anchorのbindingを差し替えません。stdout/stderrとstate出力は新しいattemptへ保存・fsyncします。CLI非0でも、新しい完全native観測と自分の停止済みprocess/state証拠が一致すれば適用済みとし、再送しません。未適用の新観測だけ再試行し、部分適用・不明は再観測/source調査へ返します。
+
+作成前は`CreationScope`でPrecreateScopeと両側discover/source topology・2完全Rootを必須にし、両Rootで新fixture不在と保護対象を確認します。作成後は封印宣言/current modelによるCreatedStageへ接続し、全新IDを元scopeと直前の両Rootへ照合します。読取stageだけでは作成所有を認めず、固定applyのprocess/rawと出力state snapshotも必要です。probeは所有作成の証拠を再検査し、元CreatedStageを保持して`collect_probe_anchor`の全layout/BSON/初期値/元IDへ接続します。追加IDだけを配備直前のRootと照合し、world/deploy stateの出力記録も結びます。Flux stateのsession文字列をnative identityにはしません。
+
+これらは内部APIであり、live CLI入口へ接続していません。fake CLI processでlost-ack/retry/帰属不明/最新Rootのmember借用拒否を検証していますが、元precreate/package/library認証はtest seam、probe試験はmodule compiler/runtimeもstubです。実機での完全統合を示しません。fresh precreate読取を含むcurrent driver、helper配備/削除/復元cleanup、Commandを含む全writerの必須source接続、absolute CLI・限定env/configSources・current cleanHEAD package/fullpreflightと指定レビューは未完了で、これらがそろう前に実機mutationへ進みません。state bytesが実配備で変化した場合はsource/journalを調査し、変更stateを盲目的に採用しません。
+
 ### 短い native Drive gate のオフライン準備
 
 `scripts/emission_editor/drivegate_package.py` の内部 API は次の 4 つです。

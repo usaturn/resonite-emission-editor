@@ -22,7 +22,7 @@ from .drivegate_package import _code_commit, _no_links, verify_package
 from .drivegate_initial import compare_initial_fields
 from .drivegate_protection import compare_protection_scope
 from .drivegate_runtime import NativeDeployedStage, assess_deployed_stage
-from .read_receipts import ReadRequest, _write_new
+from .read_receipts import ReadRequest
 
 
 def _encode(value):
@@ -35,11 +35,16 @@ def _encode(value):
     return (json.dumps(value, default=default, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n").encode()
 
 
-def _new(path, value):
-    with path.open("xb") as stream:
-        stream.write(_encode(value))
+def _new_bytes(path, raw):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(raw)
         stream.flush()
         os.fsync(stream.fileno())
+
+
+def _new(path, value):
+    _new_bytes(path, _encode(value))
 
 
 def journal_directory(execution: Path) -> Path:
@@ -100,6 +105,34 @@ def _unresolved(journal):
         if not process.exists() or not _group_stopped(json.loads(process.read_bytes())["pid"]):
             return str(attempt)
     return None
+
+
+def _execute_attempt(attempt, argv, execution, lock, *, observation):
+    """Shared internal process journal; callers construct only their fixed argv.
+
+    A launch intent without a durable stopped result remains unknown. The child
+    retains the SAME execution lock across controller death. This helper grants
+    no mutation permission and never decides whether an operation was applied.
+    """
+    _new(attempt / "intent.json", {"argv": argv, "startedAt": datetime.now(UTC).isoformat(),
+                                  "observation": observation, "cwd": str(execution)})
+    try:
+        process = subprocess.Popen(argv, cwd=execution, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, pass_fds=(lock.fileno(),))
+    except OSError as exc:
+        result = {"exitCode": None, "launchError": str(exc), "groupStopped": True,
+                  "finishedAt": datetime.now(UTC).isoformat()}
+    else:
+        _new(attempt / "process.json", {"pid": process.pid})
+        stdout, stderr = process.communicate()
+        _new_bytes(attempt / "stdout.bin", stdout)
+        _new_bytes(attempt / "stderr.bin", stderr)
+        result = {"exitCode": process.returncode, "groupStopped": _group_stopped(process.pid),
+                  "finishedAt": datetime.now(UTC).isoformat(),
+                  "stdoutSha256": hashlib.sha256(stdout).hexdigest(),
+                  "stderrSha256": hashlib.sha256(stderr).hexdigest()}
+    _new(attempt / "process-result.json", result)
+    return result
 
 
 def run_command(*, package: Path, execution: Path, baseline: NativeDeployedStage,
@@ -228,25 +261,8 @@ def run_command(*, package: Path, execution: Path, baseline: NativeDeployedStage
             attempts += 1
             attempt = run / f"attempt-{attempts}"
             attempt.mkdir(mode=0o700)
-            _new(attempt / "intent.json", {"argv": argv, "startedAt": datetime.now(UTC).isoformat(),
-                                          "observation": observations, "cwd": str(execution)})
-            # No outer timeout. The child inherits the lock across parent death;
-            # missing process/result evidence still never authorizes blind replay.
-            try:
-                process = subprocess.Popen(argv, cwd=execution, stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, pass_fds=(lock.fileno(),))
-            except OSError as exc:
-                _new(attempt / "process-result.json", {"exitCode": None, "launchError": str(exc), "groupStopped": True})
-            else:
-                _new(attempt / "process.json", {"pid": process.pid})
-                stdout, stderr = process.communicate()
-                _write_new(attempt / "stdout.bin", stdout)
-                _write_new(attempt / "stderr.bin", stderr)
-                stopped = _group_stopped(process.pid)
-                _new(attempt / "process-result.json", {"exitCode": process.returncode,
-                    "groupStopped": stopped, "finishedAt": datetime.now(UTC).isoformat(),
-                    "stdoutSha256": hashlib.sha256(stdout).hexdigest(),
-                    "stderrSha256": hashlib.sha256(stderr).hexdigest()})
-                if not stopped:
-                    return finish("source-investigation", "unknown", unresolvedProcess=str(attempt))
+            # No outer timeout; the shared helper preserves lock/process evidence.
+            process = _execute_attempt(attempt, argv, execution, lock, observation=observations)
+            if not process["groupStopped"]:
+                return finish("source-investigation", "unknown", unresolvedProcess=str(attempt))
             time.sleep(backoff_seconds)
