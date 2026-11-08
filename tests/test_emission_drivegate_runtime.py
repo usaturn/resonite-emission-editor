@@ -410,9 +410,15 @@ def test_cleanup_stage_requires_the_owned_restored_fixture_absent_and_siblings_p
     root.mkdir()
     url = last.window.url
     parent = {"id": "Root", "name": "Root", "isReferenceOnly": False, "components": [],
-              "children": [deepcopy(last.reviewed_fixture), deepcopy(last.protected_baseline)]}
+              "children": [deepcopy(last.reviewed_fixture), deepcopy(last.protected_baseline),
+                           {"id": "unprotected-sibling", "name": "other", "isReferenceOnly": False,
+                            "components": [], "children": []}]}
+    # Root motion is not collateral deletion; the explicit protected panel is
+    # still exact. This positive control must survive the scoped deletion gate.
+    parent["position"] = {"x": 0, "y": 0, "z": 0}
     after_tree = deepcopy(parent)
     after_tree["children"].pop(0)
+    after_tree["position"]["x"] = 1.25
     before = raw_read(root, "session-before", ReadRequest("component-inspect", url, "Reso_AA"), identity_data(), 241)
     request = ReadRequest("inspect", url, "Root", 64)
     pb = raw_read(root, "parent-before", request, parent, 242)
@@ -431,8 +437,9 @@ def test_cleanup_stage_requires_the_owned_restored_fixture_absent_and_siblings_p
     assert runtime.assess_cleanup_stage(package, execution, last, cleanup).status != "passed"
     (protected / "stdout.bin").unlink()
     (protected / "stdout.bin").write_bytes(original)
-    # A fresh, locally consistent read showing the wrong removal must still fail.
-    bad_after = deepcopy(parent)
+    # Even when the owned target is gone, loss of an outside object cannot be
+    # silently reported as scoped cleanup. Its values need not be protected.
+    bad_after = deepcopy(after_tree)
     bad_after["children"].pop(1)
     stdout = json.dumps({"ok": True, "data": bad_after}).encode()
     (pa / "stdout.bin").write_bytes(stdout)
@@ -468,7 +475,10 @@ def test_precreate_scope_uses_absence_and_creation_plan_not_nonexistent_deployed
     one = raw_read(tmp_path, "protected-one", pr, protected_tree, 2)
     two = raw_read(tmp_path, "protected-two", pr, protected_tree, 3)
     rr = ReadRequest("inspect", url, "Root", 64)
-    root_read = raw_read(tmp_path, "parent", rr, parent, 4)
+    observed_parent = deepcopy(parent)
+    observed_parent["position"] = {"x": 4.25, "y": .5, "z": 1.125}
+    # A normal time-dependent Root value must not veto a scoped creation plan.
+    root_read = raw_read(tmp_path, "parent", rr, observed_parent, 4)
     _, state = owned_fixture()
     state_data = json.loads(state)
     operations = [{"action": "create", "kind": kind, "key": key, "path": value.get("path", "Root/private/" + key),

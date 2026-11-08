@@ -369,6 +369,85 @@ def compare_subtree(expected: dict, actual: dict) -> Verdict:
     return _result(issues)
 
 
+def compare_root_context(expected: dict, actual: dict, *, protected: tuple[dict, ...] = ()) -> Verdict:
+    """Check Root identity/shape and explicitly protected subtrees/ancestry.
+
+    Whole-Root values are diagnostics ONLY. A passed context is not full
+    preservation/preflight or permission. Unknown unprotected member payloads
+    remain visible in wholeRootComparison; they are not validated defaults.
+    Call only on receipt-bound reads, with independently reviewed protection.
+    """
+    left, lc, li = _tree(expected)
+    right, rc, ri = _tree(actual)
+    if li or ri:
+        return _result(li + ri)
+    if (expected["id"] != "Root" or actual["id"] != "Root"
+            or expected["name"] != actual["name"]):
+        return Verdict("failed", ("root-context-identity",))
+
+    def ancestry(slots, ident):
+        chain = []
+        while ident is not None:
+            node, parent = slots[ident]
+            chain.append((ident, node["name"]))
+            ident = parent
+        return chain
+
+    for baseline in protected:
+        ident = baseline["id"]
+        # Root itself is never an implicit protection selection: that would
+        # restore whole-Root equality through this otherwise scoped API.
+        if ident == "Root" or ident not in left or ident not in right:
+            return Verdict("failed", ("root-protected-scope:" + ident,))
+        for node in (left[ident][0], right[ident][0]):
+            matched = compare_subtree(baseline, node)
+            if matched.status != "passed":
+                return matched
+        if ancestry(left, ident) != ancestry(right, ident):
+            return Verdict("failed", ("root-protected-ancestry:" + ident,))
+    comparison = compare_subtree(expected, actual)
+    diagnostic = {
+        "wholeRootComparison": {"status": comparison.status, "issues": list(comparison.issues)},
+        "slotsAdded": sorted(right.keys() - left.keys()),
+        "slotsRemoved": sorted(left.keys() - right.keys()),
+        "componentsAdded": sorted(rc.keys() - lc.keys()),
+        "componentsRemoved": sorted(lc.keys() - rc.keys()),
+    }
+    return Verdict("passed", data=(diagnostic,))
+
+
+def compare_root_deletion(expected_before: dict, before: dict, after: dict, target: str,
+                          *, protected: tuple[dict, ...] = ()) -> Verdict:
+    """Prove owned target removal and no other preexisting object loss.
+
+    Root time-dependent values/additions are diagnostic, not equality gates.
+    A concurrent outside disappearance cannot be attributed to this deletion,
+    but cannot establish its required no-collateral-loss boundary either.
+    Exact non-Root owned-parent deletion remains compare_deletion's job.
+    """
+    reviewed, _, issues = _tree(expected_before)
+    if issues:
+        return _result(issues)
+    if target == "Root" or target not in reviewed:
+        return Verdict("failed", ("deletion-target-outside-reviewed-descendants",))
+    target_tree = reviewed[target][0]
+    checked = compare_root_context(expected_before, before, protected=(*protected, target_tree))
+    if checked.status != "passed":
+        return checked
+    checked_after = compare_root_context(expected_before, after, protected=protected)
+    if checked_after.status != "passed":
+        return checked_after
+    bs, bc, _ = _tree(before)
+    ats, ac, _ = _tree(after)
+    removed_slots, removed_components, _ = _tree(target_tree)
+    if removed_slots.keys() & ats.keys() or removed_components.keys() & ac.keys():
+        return Verdict("failed", ("root-deletion-target-still-present",))
+    if (bs.keys() - removed_slots.keys() - ats.keys()
+            or bc.keys() - removed_components.keys() - ac.keys()):
+        return Verdict("failed", ("root-deletion-outside-object-loss",))
+    return Verdict("passed", data=(checked.data[0], checked_after.data[0]))
+
+
 def compare_deletion(expected_before: dict, before: dict, after: dict, target: str) -> Verdict:
     """Verify ONLY the selected descendant disappeared; never execute deletion.
 

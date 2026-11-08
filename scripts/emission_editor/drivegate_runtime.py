@@ -17,6 +17,7 @@ from .drivegate_evidence import (
     Verdict, _result, _tree, _sdk_graph, _sdk_audit, compare_subtree,
     compare_sdk_runtime, verify_runtime_execution, _PHASE_TYPES,
     ReadWindow, NativeIdentity, load_observation, compare_phase_sequence, compare_deletion,
+    compare_root_context, compare_root_deletion,
 )
 from .read_receipts import ReadRequest, load_read, _decode, _digest, _write_new
 from .drivegate_capture import DiffRequest, assess_diff, load_diff
@@ -520,6 +521,9 @@ def assess_cleanup_stage(package: Path, execution: Path, last: DeployedStage,
         same_fixture = compare_subtree(last.reviewed_fixture, slots[target][0])
         if same_fixture.status != "passed":
             return same_fixture
+        if cleanup.parent_before[0].target == "Root":
+            return compare_root_deletion(cleanup.reviewed_parent, before, after, target,
+                                         protected=(last.protected_baseline,))
         return compare_deletion(cleanup.reviewed_parent, before, after, target)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         return _result(["missing:cleanup-evidence:" + str(exc)])
@@ -577,7 +581,8 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
             matched = compare_subtree(scope.protected_baseline, observed)
             if matched.status != "passed":
                 return matched
-        parent_result = compare_subtree(scope.reviewed_parent, parent)
+        parent_result = compare_root_context(scope.reviewed_parent, parent,
+                                             protected=(scope.protected_baseline,))
         if parent_result.status != "passed":
             return parent_result
         declaration_bytes = (Path(package) / "fixture.json").read_bytes()
@@ -633,6 +638,6 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
             parsed = load_sealed_record(package, module, scope.parsed_records[role])
             if parsed.status != "passed":
                 return parsed
-        return Verdict("passed")
+        return Verdict("passed", data=parent_result.data)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         return _result(["missing:precreate-scope-evidence:" + str(exc)])

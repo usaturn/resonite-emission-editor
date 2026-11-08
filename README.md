@@ -27,7 +27,9 @@ Root全体の値の完全一致は必要ありません。Rootの位置・回転
 
 本Issueの作業全体に限り、保護範囲や比較対象の実質的な見直しも追加確認は不要です。担当が理由・新範囲・検証を記録して進めます。他Issueへの一般化、対象外への変更、未知情報の成功化、過去のraw/seal/Beforeの上書きはしません。
 
-これは現在の作業方針です。以下の低レベル比較APIや過去のone-use試行スクリプトには厳密比較/初回失敗時終了が残っており、Root全体の進行条件としてそのまま使わず、対応実装と再試行経路を別途修正します。今回の記載更新は実装修正やnative再試行の実行そのものではありません。
+`compare_root_context`はRootのIDと完全構造、明示した保護subtreeとその親の経路を検査し、Root全値差分は診断として返します。作成前の`assess_precreate_scope`と、Rootを安定親とする最終cleanupはこの区別を使います。`compare_root_deletion`は所有fixtureの消失と所有外slot/componentの不消失を検査し、所有外の値変化や追加は診断にします。並行した所有外の消失を当該操作の結果と断定しませんが、削除範囲の保全を立証できたとは扱いません。明示した保護subtreeは完全値・参照・型・親の経路を引き続き厳密に検査します。
+
+厳密な`compare_subtree`と非Root所有親の`compare_deletion`は保持します。過去のone-use Root一致/初回失敗停止スクリプトは現在の進行条件として再利用しません。実際のmutationの適用状況を確認する回復・再試行controllerはまだ未完了です。Root診断だけで完全preflightやnative成功にはしません。
 
 ### 短い native Drive gate のオフライン準備
 
@@ -60,6 +62,6 @@ package は CLI / SDK の版、DLL 一式の SHA-256 による識別情報、準
 
 `compare_native_runtime` は全構造の合格後だけ、BSON の runtime 意味検査へ接続します。除くことができるのは、すでに全構造で検証した独立既定値の member だけです。passive metadata の無条件除外で件数を合わせません。pure 比較への入力の出所は呼出側が保証する必要があります。実行側は `drivegate_runtime.assess_native_owned_graph` と `NativeDeployedStage` を使い、元の layout/BSON receipt、同じ package、現在の DLL、所有 state、private field を結びます。従来の `assess_owned_graph` / `DeployedStage` は旧オフライン検査用であり、現在の native gate の代用にしません。
 
-この照合器のオフライン検証やモデルから作ったサンプルの一致は、実機照合に成功した証拠ではありません。Root 診断化・自動復旧／再試行 controller、現在 HEAD の新 package、実機の全 phase・復元・cleanup は別の未完了作業です。
+この照合器のオフライン検証やモデルから作ったサンプルの一致は、実機照合に成功した証拠ではありません。Root診断の接続とは別に、mutationの適用状況を確認する自動回復・再試行controller、現在HEADの新package、実機の全phase・復元・cleanupは未完了です。
 
 この API は live 入口に接続しません。ビルド成功や Done だけで native 成功にはせず、`nativeSucceeded` / `complete` / `executionPermission` は常に false です。実機の保全、完全 preflight、各 phase の readback 判定は後続作業です。この短い gate は S4 全体や C9 / C30 / C23 / C31 の合格ではありません。

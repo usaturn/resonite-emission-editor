@@ -560,3 +560,28 @@ def test_known_empty_output_identity_is_preserved_through_nested_members():
     assert evidence.compare_subtree(expected, actual).status == "inconclusive"
     assert evidence.compare_typed({"kind": "empty", "id": "Reso_ED"},
                                   {"kind": "empty", "id": "Reso_ED"}).status == "inconclusive"
+
+
+def test_root_diagnostics_do_not_hide_protected_reparenting_or_value_changes():
+    # S: replacing whole-Root equality must not silently drop the selected
+    # protected object's parent/identity or complete typed-value guarantees.
+    def slot(ident, children=(), components=()):
+        return {"id": ident, "name": ident, "isReferenceOnly": False,
+                "children": list(children), "components": list(components)}
+    protected = slot("protected", components=[{
+        "id": "component", "type": "ValueField<bool>",
+        "members": {"Value": field("System.Boolean", False, "value")}}])
+    root = slot("Root", [slot("ancestor", [protected]), slot("other")])
+    moving = deepcopy(root)
+    moving["children"][1]["position"] = {"x": 1.5, "y": 0, "z": 0}
+    result = evidence.compare_root_context(root, moving, protected=(protected,))
+    assert result.status == "passed", result.issues
+    assert result.data[0]["wholeRootComparison"]["status"] == "failed"
+    assert not result.nativeSucceeded and not result.executionPermission and not result.complete
+    moved = deepcopy(moving)
+    moved["children"][1]["children"] = moved["children"][0]["children"]
+    moved["children"][0]["children"] = []
+    assert evidence.compare_root_context(root, moved, protected=(protected,)).status == "failed"
+    damaged = deepcopy(moving)
+    damaged["children"][0]["children"][0]["components"][0]["members"]["Value"]["value"] = 0
+    assert evidence.compare_root_context(root, damaged, protected=(protected,)).status != "passed"
