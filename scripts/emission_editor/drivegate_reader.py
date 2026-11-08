@@ -6,7 +6,7 @@ phase expectations. Module values/defaults come from original sealed layout and
 the DLL model. No arbitrary command, mutation, baseline adoption or success flag.
 """
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 import json
 from pathlib import Path
@@ -16,6 +16,7 @@ from .drivegate_evidence import Verdict, ReadWindow, compare_subtree, compare_ty
 from .drivegate_layout import compare_native_layout
 from .drivegate_native import load_native_layout
 from .drivegate_package import MODULES, _no_links, verify_package
+from .drivegate_protection import ProtectedScope
 from .drivegate_runtime import NativeDeployedStage, _owned_scope, assess_deployed_stage
 from .read_receipts import ReadRequest, _write_new, collect_read
 
@@ -87,7 +88,7 @@ def _save(path, value):
 def collect_native_stage(package: Path, execution: Path, anchor: NativeDeployedStage,
                          directory: Path, *, cwd: Path, roles=None,
                          parsed_records=None, native_layouts=None) -> NativeDeployedStage:
-    """Five fixed native reads/diff in one bracket, saved exclusively; NO writes.
+    """Fixed native reads and all protected diffs in one bracket; NO writes.
 
     The anchor and original layout/BSON receipts must already exist and pass
     authentication. This does not replace creation-only scope/fullpreflight or
@@ -126,12 +127,18 @@ def collect_native_stage(package: Path, execution: Path, anchor: NativeDeployedS
         url = anchor.window.url
         session_request = ReadRequest('component-inspect', url, anchor.identity.component)
         fixture_request = ReadRequest('inspect', url, anchor.reviewed_fixture['id'], 64)
-        protected_request = ReadRequest('inspect', url, anchor.protected_baseline['id'], 64)
+        protection = anchor.protected_baseline
+        protected_request = ReadRequest('inspect', url,
+            'Root' if isinstance(protection,ProtectedScope) else protection['id'], 64)
+        protected_diffs = tuple(replace(p,directory=directory/('protected-diff-'+str(i)))
+            for i,p in enumerate(protection.plans)) if isinstance(protection,ProtectedScope) else ()
         started = datetime.now(UTC)
         collect_read(session_request, directory / 'session-before', cwd=cwd)
         fixture = collect_read(fixture_request, directory / 'fixture', cwd=cwd)
         collect_read(protected_request, directory / 'protected', cwd=cwd)
         collect_diff(anchor.diff_request, directory / 'diff', cwd=cwd)
+        for entry in protected_diffs:
+            collect_diff(entry.request, entry.directory, cwd=cwd)
         collect_read(session_request, directory / 'session-after', cwd=cwd)
         finished = datetime.now(UTC)
         if state.read_bytes() != expected_state:
@@ -151,7 +158,7 @@ def collect_native_stage(package: Path, execution: Path, anchor: NativeDeployedS
             diff_directory=directory/'diff', diff_request=anchor.diff_request, expected_state=expected_state,
             expected_plan=deepcopy(anchor.expected_plan), parsed_records=records, id_maps={}, roles=roles,
             native_layouts=layout_paths, native_library_path=anchor.native_library_path,
-            native_sdk_directory=anchor.native_sdk_directory)
+            native_sdk_directory=anchor.native_sdk_directory, protected_diffs=protected_diffs)
         _save(directory / 'stage.json', asdict(stage))
         assessed = assess_deployed_stage(package, execution, stage)
         _save(directory / 'result.json', asdict(assessed))

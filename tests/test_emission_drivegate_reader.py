@@ -89,6 +89,9 @@ def test_reader_rejects_changed_state_and_retains_failed_raw(tmp_path, monkeypat
     from test_emission_drivegate_runtime import staged_fixture
     package, execution, old = staged_fixture(tmp_path, monkeypatch)
     stage = NativeDeployedStage(**vars(old), native_layouts={'bool':tmp_path/'layout'}, native_library_path=tmp_path/'lib', native_sdk_directory=tmp_path/'sdk')
+    from dataclasses import replace
+    from test_emission_drivegate_protection import protection_inputs
+    stage = replace(stage,protected_baseline=protection_inputs(tmp_path))
     monkeypatch.setattr(reader, 'assess_deployed_stage', lambda *a: Verdict('passed'))
     # This test covers transport/provenance only; real native model is tested above.
     monkeypatch.setattr(reader, 'load_native_layout', lambda *a, **k: Verdict('passed', data=({},)))
@@ -111,9 +114,14 @@ def test_reader_rejects_changed_state_and_retains_failed_raw(tmp_path, monkeypat
         return {'response':data,'transportSucceeded':True}
     monkeypatch.setattr(reader, 'collect_read', fake_read)
     # Positive capture followed by adversarial state change in a new capture.
-    monkeypatch.setattr(reader, 'collect_diff', lambda *a, **k: {})
+    diffs = []
+    monkeypatch.setattr(reader, 'collect_diff', lambda request,directory,**k: diffs.append((request,directory)))
     success = reader.collect_native_stage(package, execution, stage, tmp_path/'fresh', cwd=tmp_path)
     assert isinstance(success, NativeDeployedStage)
+    assert success.protected_read[0].target == 'Root'
+    assert [r for r,_ in diffs] == [old.diff_request,*(p.request for p in stage.protected_baseline.plans)]
+    assert len(success.protected_diffs) == 2
+    assert all(p.directory.parent == tmp_path/'fresh' for p in success.protected_diffs)
     def changed_read(request, directory, *, cwd):
         result = fake_read(request, directory, cwd=cwd)
         old.diff_request.state.write_bytes(b'changed-state')

@@ -209,6 +209,40 @@ def test_deployed_stage_requires_raw_session_protection_diff_scope_and_sdk_toget
     wrong["name"] = "another panel"
     assert runtime.assess_deployed_stage(package, execution, replace(stage, protected_baseline=wrong)).status == "failed"
     assert not runtime.assess_deployed_stage(package, execution, stage).nativeSucceeded
+    # The same raw/session/diff gate must select BOTH roots from a Root read
+    # which also contains the owned fixture, and require each fresh no-op diff.
+    from scripts.emission_editor import drivegate_capture
+    from scripts.emission_editor.read_receipts import ReadRequest
+    from test_emission_drivegate_evidence import raw_read, START
+    from test_emission_drivegate_protection import protection_inputs
+    from datetime import timedelta
+    protection = protection_inputs(tmp_path)
+    templates, fresh = [], []
+    class Clock:
+        ticks = iter(range(4,8))
+        @classmethod
+        def now(cls, zone): return stage.window.started + timedelta(seconds=next(cls.ticks))
+    with monkeypatch.context() as patched:
+        patched.setattr(drivegate_capture,'datetime',Clock)
+        for entry in protection.plans:
+            plan = entry.expected_plan | {'valid':True,'schemaVersion':'1','creates':0,'updates':0,
+                'noOps':len(entry.expected_plan['operations']),'renames':0,'deletes':0,'atomic':False,'recovery':'checkpoint-and-reapply','warnings':[]}
+            template = replace(entry,expected_plan=plan)
+            template.request.declaration.write_bytes(template.sealed_declaration)
+            template.request.state.write_bytes(template.expected_state)
+            monkeypatch.setenv('FAKE_DIFF_DATA',json.dumps(plan))
+            drivegate_capture.collect_diff(template.request,template.directory,cwd=tmp_path)
+            templates.append(template); fresh.append(template)
+    protection = replace(protection,plans=tuple(templates))
+    root_tree = deepcopy(protection.context)
+    root_tree['position'] = {'x':4.25,'y':.5,'z':1.125}
+    root_tree['children'].append(deepcopy(stage.reviewed_fixture))
+    rr = ReadRequest('inspect',stage.window.url,'Root',64)
+    root_read = raw_read(tmp_path,'protected-root',rr,root_tree,(stage.window.started-START).total_seconds()+2)
+    multi = replace(stage,protected_baseline=protection,protected_read=(rr,root_read),protected_diffs=tuple(fresh))
+    result = runtime.assess_deployed_stage(package,execution,multi)
+    assert result.status == 'passed', result.issues
+    assert runtime.assess_deployed_stage(package,execution,replace(multi,protected_diffs=tuple(fresh[:1]))).status != 'passed'
 
 
 def phase_sdk(module):
@@ -406,6 +440,22 @@ def test_cleanup_stage_requires_the_owned_restored_fixture_absent_and_siblings_p
     from test_emission_drivegate_evidence import raw_read, identity_data, START
     package, execution, stages = phase_stage_inputs(tmp_path, monkeypatch)
     last = stages[-1]
+    # Real ID-inspect paths start at fixture Name; Root-inspect paths start at
+    # Root. Preserve all parent metadata and rebase only the path on a copy.
+    from dataclasses import replace
+    relative = deepcopy(last.reviewed_fixture)
+    def relative_paths(node,parent,path):
+        node['parentId'],node['path'] = parent,path
+        for child in node['children']:
+            relative_paths(child,node['id'],path+'/'+child['name'])
+    relative_paths(relative,'Root',relative['name'])
+    stdout = json.dumps({'ok':True,'data':relative}).encode()
+    (last.fixture_read[1]/'stdout.bin').write_bytes(stdout)
+    receipt_path = last.fixture_read[1]/'receipt.json'
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt['stdoutSha256'] = hashlib.sha256(stdout).hexdigest()
+    receipt_path.write_text(json.dumps(receipt))
+    last = replace(last,reviewed_fixture=relative)
     root = tmp_path / "cleanup"
     root.mkdir()
     url = last.window.url
@@ -415,6 +465,11 @@ def test_cleanup_stage_requires_the_owned_restored_fixture_absent_and_siblings_p
                             "components": [], "children": []}]}
     # Root motion is not collateral deletion; the explicit protected panel is
     # still exact. This positive control must survive the scoped deletion gate.
+    parent['path'],parent['parentId'] = 'Root',None
+    def prefix_paths(node):
+        node['path'] = 'Root/'+node['path']
+        for child in node['children']: prefix_paths(child)
+    prefix_paths(parent['children'][0])
     parent["position"] = {"x": 0, "y": 0, "z": 0}
     after_tree = deepcopy(parent)
     after_tree["children"].pop(0)
@@ -468,12 +523,13 @@ def test_precreate_scope_uses_absence_and_creation_plan_not_nonexistent_deployed
         assert runtime.parse_sealed_record(package, module, parsed[role]).status == "passed"
     fake_cli(tmp_path, monkeypatch)
     url = "ws://localhost:16070"
-    protected_tree = {"id": "Reso_EA", "name": "protected", "isReferenceOnly": False, "components": [], "children": []}
-    parent = {"id": "Root", "name": "Root", "isReferenceOnly": False, "components": [], "children": [deepcopy(protected_tree)]}
+    from test_emission_drivegate_protection import protection_inputs
+    protection = protection_inputs(tmp_path)
+    parent = deepcopy(protection.context)
     before = raw_read(tmp_path, "session-before", ReadRequest("component-inspect", url, "Reso_AA"), identity_data(), 1)
-    pr = ReadRequest("inspect", url, "Reso_EA", 64)
-    one = raw_read(tmp_path, "protected-one", pr, protected_tree, 2)
-    two = raw_read(tmp_path, "protected-two", pr, protected_tree, 3)
+    pr = ReadRequest("inspect", url, "Root", 64)
+    one = raw_read(tmp_path, "protected-one", pr, parent, 2)
+    two = raw_read(tmp_path, "protected-two", pr, parent, 3)
     rr = ReadRequest("inspect", url, "Root", 64)
     observed_parent = deepcopy(parent)
     observed_parent["position"] = {"x": 4.25, "y": .5, "z": 1.125}
@@ -488,31 +544,31 @@ def test_precreate_scope_uses_absence_and_creation_plan_not_nonexistent_deployed
     creation = {"valid": True, "schemaVersion": "1", "ownershipKey": "emission-drivegate-offline", "stateFile": str(state_path),
                 "operations": operations, "changes": deepcopy(operations), "creates": len(operations), "updates": 0, "noOps": 0, "renames": 0, "deletes": 0,
                 "atomic": False, "recovery": "checkpoint-and-reapply", "warnings": []}
-    panel_state = tmp_path / "panel-state.json"
-    panel_state.write_bytes(b"{}")
-    panel_declaration = tmp_path / "panel.json"
-    panel_declaration.write_bytes(b'{"panel":"sealed"}')
-    noop = {"action": "no-op", "kind": "slot", "key": "panel", "path": "Root/protected", "atomic": False, "recovery": "checkpoint-and-reapply"}
-    preservation = creation | {"ownershipKey": "panel-owner", "stateFile": str(panel_state), "operations": [noop], "changes": [], "creates": 0, "noOps": 1}
+    templates = []
+    for i,entry in enumerate(protection.plans):
+        plan = creation | entry.expected_plan | {'creates':0,'noOps':len(entry.expected_plan['operations'])}
+        entry.request.declaration.write_bytes(entry.sealed_declaration)
+        entry.request.state.write_bytes(entry.expected_state)
+        templates.append(replace(entry,expected_plan=plan,directory=tmp_path/('diff-'+str(i+1))))
+    protection = replace(protection,plans=tuple(templates))
     class Clock:
-        ticks = iter((6, 7, 8, 9))
+        ticks = iter(range(6,12))
         @classmethod
         def now(cls, zone): return START + timedelta(seconds=next(cls.ticks))
-    requests = [drivegate_capture.DiffRequest(url, execution / "fixture.json", state_path), drivegate_capture.DiffRequest(url, panel_declaration, panel_state)]
+    requests = [drivegate_capture.DiffRequest(url, execution / "fixture.json", state_path),*(p.request for p in templates)]
     with monkeypatch.context() as clock_patch:
         clock_patch.setattr(drivegate_capture, "datetime", Clock)
-        for index, plan in enumerate((creation, preservation)):
+        for index, plan in enumerate((creation,*(p.expected_plan for p in templates))):
             monkeypatch.setenv("FAKE_DIFF_DATA", json.dumps(plan))
             drivegate_capture.collect_diff(requests[index], tmp_path / ("diff-" + str(index)), cwd=tmp_path)
-    after = raw_read(tmp_path, "session-after", ReadRequest("component-inspect", url, "Reso_AA"), identity_data(), 11)
+    after = raw_read(tmp_path, "session-after", ReadRequest("component-inspect", url, "Reso_AA"), identity_data(), 14)
     fixture_diff = runtime.DiffInput(tmp_path / "diff-0", requests[0], None, creation, (package / "fixture.json").read_bytes())
-    panel_diff = runtime.DiffInput(tmp_path / "diff-1", requests[1], b"{}", preservation, panel_declaration.read_bytes())
-    scope = runtime.PrecreateScope(ReadWindow(url, START, START + timedelta(seconds=12), START + timedelta(seconds=13)),
+    scope = runtime.PrecreateScope(ReadWindow(url, START, START + timedelta(seconds=15), START + timedelta(seconds=16)),
         NativeIdentity("Reso_AA", "Value", "世界・試験"), before, after, (rr, root_read), [(pr, one), (pr, two)],
-        deepcopy(parent), deepcopy(protected_tree), fixture_diff, panel_diff, parsed)
+        deepcopy(parent), protection, fixture_diff, tuple(templates), parsed)
     result = runtime.assess_precreate_scope(package, execution, scope)
     assert result.status == "passed", result.issues
     assert not result.complete and not result.executionPermission
-    assert runtime.assess_precreate_scope(package, execution, replace(scope, fixture_diff=panel_diff)).status != "passed"
+    assert runtime.assess_precreate_scope(package, execution, replace(scope, fixture_diff=templates[0])).status != "passed"
     # A single protected read is not the independent two-process observation.
     assert runtime.assess_precreate_scope(package, execution, replace(scope, protected_reads=[(pr, one)])).status != "passed"

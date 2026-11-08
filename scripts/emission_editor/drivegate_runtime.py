@@ -3,7 +3,7 @@
 No full-preflight or full-native-success API is exposed here. A passed named
 stage proves only its documented inputs. Parse processes are fixed and offline.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
 from pathlib import Path
@@ -17,10 +17,37 @@ from .drivegate_evidence import (
     Verdict, _result, _tree, _sdk_graph, _sdk_audit, compare_subtree,
     compare_sdk_runtime, verify_runtime_execution, _PHASE_TYPES,
     ReadWindow, NativeIdentity, load_observation, compare_phase_sequence, compare_deletion,
-    compare_root_context, compare_root_deletion,
+    compare_root_context, compare_root_deletion, compare_embedded_subtree,
 )
 from .read_receipts import ReadRequest, load_read, _decode, _digest, _write_new
 from .drivegate_capture import DiffRequest, assess_diff, load_diff
+from .drivegate_protection import (
+    ProtectedScope, protection_roots, protection_ids, compare_protection,
+    compare_protection_scope, validate_protected_diffs,
+)
+
+
+def _assess_protected_diffs(baseline, inputs, window, before_session, after_session):
+    inputs = validate_protected_diffs(baseline, inputs)
+    before, after = load_read(before_session), load_read(after_session)
+    for entry in inputs:
+        result = assess_diff(entry.directory, request=entry.request, window=window,
+            sealed_declaration=entry.sealed_declaration, expected_state=entry.expected_state,
+            expected_plan=entry.expected_plan)
+        if result.status != 'passed':
+            return result
+        if result.data[0]['changes']:
+            return Verdict('failed', ('protected-diff-has-changes',))
+        receipt = load_diff(entry.directory)
+        if not (datetime.fromisoformat(before['finishedAt']) <= datetime.fromisoformat(receipt['startedAt'])
+                <= datetime.fromisoformat(receipt['finishedAt']) <= datetime.fromisoformat(after['startedAt'])):
+            return Verdict('failed', ('protected-diff-outside-native-bracket',))
+    return Verdict('passed')
+
+
+def _stage_directories(stage):
+    return (stage.before_session, stage.fixture_read[1], stage.protected_read[1],
+            stage.after_session, stage.diff_directory, *(d.directory for d in stage.protected_diffs))
 
 
 def _parser_paths(package, module, directory):
@@ -289,7 +316,7 @@ class DeployedStage:
     fixture_read: tuple[ReadRequest, Path]
     protected_read: tuple[ReadRequest, Path]
     reviewed_fixture: dict
-    protected_baseline: dict
+    protected_baseline: dict | ProtectedScope
     diff_directory: Path
     diff_request: DiffRequest
     expected_state: bytes
@@ -297,6 +324,7 @@ class DeployedStage:
     parsed_records: dict
     id_maps: dict
     roles: tuple[str, ...]
+    protected_diffs: tuple['DiffInput', ...] = field(default=(), kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -337,13 +365,16 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
         fixture, protected = observed.data
         if any(request.operation != "inspect" for request, _ in (stage.fixture_read, stage.protected_read)):
             return Verdict("failed", ("stage-complete-inspect-required",))
-        protected_result = compare_subtree(stage.protected_baseline, protected)
+        protected_result = compare_protection(stage.protected_baseline, protected)
         if protected_result.status != "passed":
             return protected_result
         fs, fc, _ = _tree(fixture)
-        ps, pc, _ = _tree(protected)
-        if (set(fs) | set(fc)) & (set(ps) | set(pc)):
+        if (set(fs) | set(fc)) & protection_ids(stage.protected_baseline):
             return Verdict("failed", ("stage-protected-fixture-overlap",))
+        protected_diff = _assess_protected_diffs(stage.protected_baseline, stage.protected_diffs,
+            stage.window, stage.before_session, stage.after_session)
+        if protected_diff.status != 'passed':
+            return protected_diff
         fixture_bytes = (Path(package) / "fixture.json").read_bytes()
         declaration = _decode(fixture_bytes)
         world_states = {_decode((Path(package) / "manifests" / (r + ".json")).read_bytes())["worldState"] for r in MODULES}
@@ -378,7 +409,7 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
                 <= datetime.fromisoformat(receipt["finishedAt"]) <= datetime.fromisoformat(after["startedAt"])):
             return Verdict("failed", ("stage-diff-outside-native-bracket",))
         physical = set()
-        for directory in (stage.before_session, stage.fixture_read[1], stage.protected_read[1], stage.after_session, stage.diff_directory):
+        for directory in _stage_directories(stage):
             for name in ("receipt.json", "stdout.bin"):
                 stat = (Path(directory) / name).stat()
                 key = (stat.st_dev, stat.st_ino)
@@ -433,7 +464,7 @@ def assess_phase_stages(package: Path, execution: Path, baseline: DeployedStage,
     previous = None
     try:
         for number, (stage, roles) in enumerate(zip(stages, required_roles)):
-            preservation = compare_subtree(baseline.protected_baseline, stage.protected_baseline)
+            preservation = compare_protection_scope(baseline.protected_baseline, stage.protected_baseline)
             if preservation.status != "passed":
                 return Verdict(preservation.status, ("phase-changed-protected-baseline", *preservation.issues))
             if stage.roles != roles:
@@ -443,7 +474,7 @@ def assess_phase_stages(package: Path, execution: Path, baseline: DeployedStage,
             if previous is not None and stage.window.started < previous:
                 return Verdict("failed", ("phase-replayed-or-overlapping-window",))
             previous = stage.window.finished
-            for directory in (stage.before_session, stage.fixture_read[1], stage.protected_read[1], stage.after_session, stage.diff_directory):
+            for directory in _stage_directories(stage):
                 for name in ("receipt.json", "stdout.bin"):
                     path = Path(directory) / name
                     stat = path.stat()
@@ -499,6 +530,7 @@ class CleanupStage:
     parent_after: tuple[ReadRequest, Path]
     protected_read: tuple[ReadRequest, Path]
     reviewed_parent: dict
+    protected_diffs: tuple['DiffInput', ...] = field(default=(), kw_only=True)
 
 
 def assess_cleanup_stage(package: Path, execution: Path, last: DeployedStage,
@@ -527,8 +559,9 @@ def assess_cleanup_stage(package: Path, execution: Path, last: DeployedStage,
                 or any(r.operation != "inspect" for r, _ in (cleanup.parent_before, cleanup.parent_after, cleanup.protected_read))):
             return Verdict("failed", ("cleanup-stable-parent-request",))
         used = set()
-        for directory in (last.before_session, last.fixture_read[1], last.protected_read[1], last.after_session, last.diff_directory,
-                          cleanup.before_session, cleanup.parent_before[1], cleanup.parent_after[1], cleanup.protected_read[1], cleanup.after_session):
+        for directory in (*_stage_directories(last), cleanup.before_session, cleanup.parent_before[1],
+                          cleanup.parent_after[1], cleanup.protected_read[1], cleanup.after_session,
+                          *(d.directory for d in cleanup.protected_diffs)):
             for name in ("receipt.json", "stdout.bin"):
                 stat = (Path(directory) / name).stat()
                 key = (stat.st_dev, stat.st_ino)
@@ -541,21 +574,25 @@ def assess_cleanup_stage(package: Path, execution: Path, last: DeployedStage,
         if observed.status != "passed":
             return observed
         before, after, protected = observed.data
-        preserved = compare_subtree(last.protected_baseline, protected)
+        preserved = compare_protection(last.protected_baseline, protected)
         if preserved.status != "passed":
             return preserved
+        protected_diff = _assess_protected_diffs(last.protected_baseline, cleanup.protected_diffs,
+            cleanup.window, cleanup.before_session, cleanup.after_session)
+        if protected_diff.status != 'passed':
+            return protected_diff
         slots, _, issues = _tree(before)
         if issues:
             return _result(issues)
         target = last.reviewed_fixture["id"]
         if target not in slots:
             return Verdict("inconclusive", ("missing:owned-fixture-before-cleanup",))
-        same_fixture = compare_subtree(last.reviewed_fixture, slots[target][0])
+        same_fixture = compare_embedded_subtree(last.reviewed_fixture, before)
         if same_fixture.status != "passed":
             return same_fixture
         if cleanup.parent_before[0].target == "Root":
             return compare_root_deletion(cleanup.reviewed_parent, before, after, target,
-                                         protected=(last.protected_baseline,))
+                                         protected=protection_roots(last.protected_baseline))
         return compare_deletion(cleanup.reviewed_parent, before, after, target)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         return _result(["missing:cleanup-evidence:" + str(exc)])
@@ -584,9 +621,9 @@ class PrecreateScope:
     parent_read: tuple[ReadRequest, Path]
     protected_reads: list[tuple[ReadRequest, Path]]
     reviewed_parent: dict
-    protected_baseline: dict
+    protected_baseline: dict | ProtectedScope
     fixture_diff: DiffInput
-    protected_diff: DiffInput
+    protected_diff: DiffInput | tuple[DiffInput, ...]
     parsed_records: dict
 
 
@@ -610,11 +647,11 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
             return observation
         one, two, parent = observation.data
         for observed in (one, two):
-            matched = compare_subtree(scope.protected_baseline, observed)
+            matched = compare_protection(scope.protected_baseline, observed)
             if matched.status != "passed":
                 return matched
         parent_result = compare_root_context(scope.reviewed_parent, parent,
-                                             protected=(scope.protected_baseline,))
+                                             protected=protection_roots(scope.protected_baseline))
         if parent_result.status != "passed":
             return parent_result
         declaration_bytes = (Path(package) / "fixture.json").read_bytes()
@@ -632,7 +669,9 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
             return Verdict("failed", ("precreate-fixture-diff-context",))
         all_directories = [scope.before_session, *(p for _, p in scope.protected_reads), scope.parent_read[1], scope.after_session]
         before, after = load_read(scope.before_session), load_read(scope.after_session)
-        for diff_input in (scope.fixture_diff, scope.protected_diff):
+        protected_inputs = scope.protected_diff if isinstance(scope.protected_diff, tuple) else (scope.protected_diff,)
+        protected_inputs = validate_protected_diffs(scope.protected_baseline, protected_inputs)
+        for diff_input in (scope.fixture_diff, *protected_inputs):
             compared = assess_diff(diff_input.directory, request=diff_input.request, window=scope.window,
                                    sealed_declaration=diff_input.sealed_declaration, expected_state=diff_input.expected_state,
                                    expected_plan=diff_input.expected_plan)
@@ -662,7 +701,7 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
         if (any(op["action"] != "create" for op in operations)
                 or {(op["kind"], op["key"]) for op in operations} != expected_keys):
             return Verdict("failed", ("precreate-not-complete-creation-plan",))
-        if scope.protected_diff.expected_plan["changes"]:
+        if any(d.expected_plan['changes'] for d in protected_inputs):
             return Verdict("failed", ("precreate-protected-diff-has-changes",))
         if set(scope.parsed_records) != set(MODULES):
             return Verdict("inconclusive", ("missing:all-sealed-module-graphs",))

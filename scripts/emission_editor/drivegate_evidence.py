@@ -369,6 +369,47 @@ def compare_subtree(expected: dict, actual: dict) -> Verdict:
     return _result(issues)
 
 
+def compare_embedded_subtree(expected: dict, container: dict) -> Verdict:
+    """Join ID-inspect relative paths to a stable-parent inspect, without filtering.
+
+    Source Inspect/AddPaths starts at the selected slot's Name. Check every
+    source path/parent and the observed ancestor prefix, then change only path
+    on a copy. All IDs, parent references, metadata and values remain strict.
+    Legacy offline fixtures without path metadata retain their exact comparison.
+    """
+    from copy import deepcopy
+    try:
+        slots, _, issues = _tree(container)
+        if issues:
+            return _result(issues)
+        ident = expected['id']
+        if ident not in slots or slots[ident][1] is None:
+            return Verdict('failed', ('embedded-subtree-parent-missing',))
+        actual, parent = slots[ident]
+        if 'path' not in expected:
+            return compare_subtree(expected, actual)
+        # Validate the entire observed ancestor prefix, not a guessed string.
+        def prefix(ident):
+            node, parent = slots[ident]
+            path = node['name'] if parent is None else prefix(parent) + '/' + node['name']
+            if (node.get('path') != path or (parent is not None or node['id'] == 'Root')
+                    and node.get('parentId') != parent):
+                raise ValueError('embedded-subtree-ancestor-path-or-parent')
+            return path
+        parent_path = prefix(parent)
+        result = deepcopy(expected)
+        def rebase(node, parent, relative):
+            if node.get('path') != relative or node.get('parentId') != parent:
+                raise ValueError('embedded-subtree-source-path-or-parent')
+            node['path'] = parent_path + '/' + relative
+            for child in node['children']:
+                rebase(child,node['id'],relative + '/' + child['name'])
+        rebase(result,parent,result['name'])
+        return compare_subtree(result,actual)
+    except (KeyError,TypeError,ValueError,AttributeError) as exc:
+        return Verdict('failed', ('embedded-subtree:' + str(exc),))
+
+
 def compare_root_context(expected: dict, actual: dict, *, protected: tuple[dict, ...] = ()) -> Verdict:
     """Check Root identity/shape and explicitly protected subtrees/ancestry.
 

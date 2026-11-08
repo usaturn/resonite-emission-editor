@@ -17,9 +17,10 @@ import re
 import subprocess
 import time
 
-from .drivegate_evidence import compare_subtree, compare_typed, phase_expectations
+from .drivegate_evidence import compare_typed, phase_expectations
 from .drivegate_package import _code_commit, _no_links, verify_package
 from .drivegate_initial import compare_initial_fields
+from .drivegate_protection import compare_protection_scope
 from .drivegate_runtime import NativeDeployedStage, assess_deployed_stage
 from .read_receipts import ReadRequest, _write_new
 
@@ -68,7 +69,7 @@ def _context(baseline, previous, stage, stable, original_stable):
     if (stage.identity != baseline.identity or stage.window.url != baseline.window.url
             or stage.reviewed_fixture["id"] != baseline.reviewed_fixture["id"]
             or stage.expected_state != previous.expected_state or stage.roles != previous.roles
-            or compare_subtree(baseline.protected_baseline, stage.protected_baseline).status != "passed"
+            or compare_protection_scope(baseline.protected_baseline, stage.protected_baseline).status != "passed"
             or stable.keys() != original_stable.keys()
             or any(stable[k]["id"] != original_stable[k]["id"] for k in stable)):
         raise ValueError("command-context-or-ownership-change")
@@ -146,7 +147,7 @@ def run_command(*, package: Path, execution: Path, baseline: NativeDeployedStage
         roles = ("probe", "color", "bool") if number == 3 else ("probe", "bool") if number == 4 else ("probe",)
         if (previous.roles != roles or not _equal(expected_previous, old_fields)
                 or previous.identity != baseline.identity or previous.window.url != baseline.window.url
-                or compare_subtree(baseline.protected_baseline, previous.protected_baseline).status != "passed"
+                or compare_protection_scope(baseline.protected_baseline, previous.protected_baseline).status != "passed"
                 or old_stable.keys() != base_stable.keys()
                 or any(old_stable[k]["id"] != base_stable[k]["id"] for k in base_stable)):
             raise ValueError("command-invalid-previous-checkpoint")

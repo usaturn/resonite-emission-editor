@@ -27,13 +27,15 @@ def setup_controller(tmp_path, monkeypatch):
         fields[name]['value'] = {'r':0.,'g':0.,'b':0.,'a':1.,'profile':'sRGB'}
     expected = phase_expectations(fields).data
     identity = NativeIdentity("Reso_AA", "Value", "世界・試験")
+    from test_emission_drivegate_protection import protection_inputs
+    protection = protection_inputs(tmp_path)
 
     def stage(current, *, session=identity, roles=("probe",)):
         now = datetime.now(UTC)
         value = NativeDeployedStage(ReadWindow("ws://localhost:16070", now, now, now), session,
             tmp_path / "before", tmp_path / "after", (None, tmp_path / "fixture"),
             (None, tmp_path / "protected"), {"id": "Reso_FA"},
-            {"id": "Reso_BE", "name": "既存", "isReferenceOnly": False, "components": [], "children": []},
+            deepcopy(protection),
             tmp_path / "diff", None,
             b"original-state", {}, {}, {}, roles, {}, tmp_path / "library", tmp_path / "sdk")
         data[id(value)] = (deepcopy(current), {"drivegate-root": {"id": "Reso_FA"}})
@@ -126,7 +128,10 @@ def test_partial_capture_and_foreign_session_are_never_replayed(tmp_path, monkey
     assert result["status"] == "source-investigation" and not calls.exists()
     def changed_protection():
         current = read(expected[0])
-        current.protected_baseline["name"] = "different protected scope"
+        from dataclasses import replace
+        protection = current.protected_baseline
+        object.__setattr__(current,'protected_baseline',
+            replace(protection,roots=protection.roots[:1],plans=protection.plans[:1]))
         return current
     result = controller.run_command(**args, observe=changed_protection)
     assert result["application"] == "unknown" and not calls.exists()
