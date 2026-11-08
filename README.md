@@ -20,7 +20,7 @@ uv run python -m scripts.emission_editor.slim_demo observe \
   --directory /absolute/new-demo-directory
 ```
 
-`prepare`は新しい試験用材質・共有メッシュ2個と、別所有の1行パネルだけを作ります。見本のメッシュはパネル右側に縦に並べて取り付け、パネルを動かしても一緒に移動します。配置調整は既存IDと材質の値を保ちます。既存アバター/保存済みパネルには書き込みません。既存UIとnativeのRowPreview/RowCommand/Commitを配備し、起動後はPC処理なしで編集できます。公開の汎用register入口は引き続き無効です。`observe`はこのパネルと試験材質の読み取りだけです。
+`prepare`は新しい試験用材質・共有メッシュ2個と、別所有の1行パネルだけを作ります。見本のメッシュはパネル右側に縦に並べて取り付け、パネルを動かしても一緒に移動します。配置調整は既存IDと材質の値を保ちます。試験用XiexeToonMaterialには白一色のSolidColorTextureをEmissionMapへ結び、EmissionColorの変化が描画にも出るようにします。この材質はEmissionMapが未設定だとEmissionColorだけでは発光しません（[Resonite Wiki](https://wiki.resonite.com/Component:XiexeToonMaterial)）。実アバターの発光マップを勝手に追加・変更する機能ではありません。既存アバター/保存済みパネルには書き込みません。既存UIとnativeのRowPreview/RowCommand/Commitを配備し、起動後はPC処理なしで編集できます。公開の汎用register入口は引き続き無効です。`observe`はこのパネルと試験材質の読み取りだけです。
 
 新しいパネルの見出しは「動作確認用・新パネル [登録ID]」です。開始ボタンは取得後に「開始済み」へ変わります。パネルの「編集を開始」→試験用対象を選択→RGB入力でライブ反映、「元に戻す」で編集継続、「キャンセル」で復元して終了、「OK」で変更を確定します。OKとキャンセルでは選択が外れて数値の行が隠れます。一覧から同じ対象を選び直すと、確定後の値または復元後の値を表示し、新しい編集を始めます。操作・見た目の確認はCLIの配備成功とは別です。保存/終了前にはOKかキャンセルを押してください。
 

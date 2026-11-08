@@ -59,8 +59,11 @@ class Demo:
 
 
 def fixture(token):
+    emission_map = ui.node('demo-emission-map-slot',components=[ui.component('demo-emission-map',
+        ui.F+'SolidColorTexture',{'Color':[1.,1.,1.,1.],'Size':[1,1],'Mipmaps':False})])
     material = ui.node('demo-material-slot',components=[ui.component('demo-material',
-        ui.F+'XiexeToonMaterial',initial={'EmissionColor':[2.,1.,1.,.37]})])
+        ui.F+'XiexeToonMaterial',{'EmissionMap':'$component:demo-emission-map'},
+        initial={'EmissionColor':[2.,1.,1.,.37]})])
     meshes = [ui.node('demo-mesh-'+str(i),position=[i*.4,0,0],components=[
         ui.component('demo-box-'+str(i),ui.F+'BoxMesh',{'Size':[.3,.3,.3]}),
         ui.component('demo-renderer-'+str(i),ui.F+'MeshRenderer',{
@@ -71,7 +74,7 @@ def fixture(token):
                 'parent':'Root','position':[-.65,1.25,1.5]},
         'components':[ui.component('demo-objectroot',ui.F+'ObjectRoot'),
                       ui.component('demo-avatar',ui.F+'CommonAvatar.AvatarRoot')],
-        'children':[material,*meshes]}
+        'children':[material,emission_map,*meshes]}
 
 
 def attached_fixture(document, panel_name):
