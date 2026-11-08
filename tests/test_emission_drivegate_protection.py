@@ -75,6 +75,32 @@ def test_protection_preserves_both_roots_not_unrelated_root_values_or_fixture(tm
         validate_protected_diffs(forged_scope,forged_scope.plans)
 
 
+def test_explicit_diff_projection_keeps_the_omitted_native_graph_fully_protected(tmp_path):
+    # S: CLI Apply declarations reject generated duplicate sibling Names. A
+    # structural diff may omit explicit graph subtrees, NEVER their strict raw
+    # preservation, nor an entire protected root or an unrecorded boundary.
+    baseline = protection_inputs(tmp_path)
+    roots = deepcopy(baseline.roots)
+    graph = node('Reso_A0','PG','Reso_EA','Root/panel/PG',[
+        node('Reso_A1','AND_Bool','Reso_A0','Root/panel/PG/AND_Bool'),
+        node('Reso_A2','AND_Bool','Reso_A0','Root/panel/PG/AND_Bool')])
+    roots[0]['children'].append(graph)
+    context = node('Root','Root',None,'Root',deepcopy(roots))
+    baseline = replace(baseline,roots=roots,context=context,diff_omitted_roots=('Reso_A0',))
+    assert validate_protected_diffs(baseline,baseline.plans) == baseline.plans
+    assert compare_protection(baseline,deepcopy(context)).status == 'passed'
+    changed = deepcopy(context)
+    changed['children'][0]['children'][0]['children'][0]['name'] = 'foreign graph'
+    assert compare_protection(baseline,changed).status != 'passed'
+    all_ids = protection_ids(baseline)
+    assert {'Reso_A0','Reso_A1','Reso_A2'} <= all_ids
+    with pytest.raises(ValueError,match='protected-diff-complete-coverage'):
+        validate_protected_diffs(replace(baseline,diff_omitted_roots=()),baseline.plans)
+    assert compare_protection_scope(baseline,replace(baseline,diff_omitted_roots=())).status != 'passed'
+    with pytest.raises(ValueError,match='protected-diff-omitted'):
+        validate_protected_diffs(replace(baseline,diff_omitted_roots=('Reso_EA',)),baseline.plans)
+
+
 def test_cleanup_rebases_only_valid_relative_paths_and_actual_parent():
     # S: ignoring path/parent mismatches could authenticate another subtree.
     child = node('Reso_EB','非ASCII','Reso_EA','owned/非ASCII')

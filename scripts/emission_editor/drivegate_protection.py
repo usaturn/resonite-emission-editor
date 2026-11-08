@@ -2,7 +2,9 @@
 
 Legacy offline callers may still supply a single subtree dictionary. Native
 multi-root callers supply an independently reviewed context, selected subtrees
-and complete no-op diff templates. Whole Root values are never protected.
+and complete no-op diff templates for an explicit declaration projection.
+Native graph subtrees omitted ONLY from that projection stay strictly protected
+in full roots/context. Whole Root values are never protected.
 """
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -21,6 +23,9 @@ class ProtectedScope:
     context: dict
     roots: tuple[dict, ...]
     plans: tuple['DiffInput', ...]
+    # Only the CLI declaration projection. These native subtrees REMAIN fully
+    # present in roots/context, protection_ids and strict before/after checks.
+    diff_omitted_roots: tuple[str, ...] = ()
 
 
 def protection_roots(baseline):
@@ -38,7 +43,34 @@ def protection_roots(baseline):
     matched = compare_root_context(baseline.context, baseline.context, protected=baseline.roots)
     if matched.status != 'passed':
         raise ValueError('protected-scope-context:' + ','.join(matched.issues))
+    _diff_coverage(baseline.roots, baseline.diff_omitted_roots)
     return baseline.roots
+
+
+def _diff_coverage(roots, omitted):
+    if not isinstance(omitted, tuple) or len(set(omitted)) != len(omitted):
+        raise ValueError('protected-diff-omitted-root-set')
+    indexed = {}
+    coverage = {}
+    for root in roots:
+        slots, components, issues = _tree(root)
+        if issues:
+            raise ValueError('protected-diff-omitted-incomplete-tree')
+        indexed.update({ident:(node,root['id']) for ident,(node,_) in slots.items()})
+        coverage[root['id']] = (set(slots),set(components))
+    removed = set()
+    for ident in omitted:
+        if not isinstance(ident,str) or ident not in indexed or ident in coverage:
+            raise ValueError('protected-diff-omitted-foreign-or-whole-root')
+        node,owner = indexed[ident]
+        slots,components,_ = _tree(node)
+        ids = set(slots) | set(components)
+        if removed & ids:
+            raise ValueError('protected-diff-omitted-overlapping-roots')
+        removed.update(ids)
+        coverage[owner][0].difference_update(slots)
+        coverage[owner][1].difference_update(components)
+    return coverage
 
 
 def protection_ids(baseline):
@@ -68,6 +100,8 @@ def compare_protection_scope(original, current):
     right = {r['id']:r for r in protection_roots(current)}
     if left.keys() != right.keys():
         return Verdict('failed', ('protected-scope-root-set-changed',))
+    if original.diff_omitted_roots != current.diff_omitted_roots:
+        return Verdict('failed', ('protected-scope-diff-projection-changed',))
     for ident in left:
         checked = compare_subtree(left[ident],right[ident])
         if checked.status != 'passed':
@@ -81,7 +115,7 @@ def compare_protection_scope(original, current):
     return compare_root_context(original.context,current.context,protected=original.roots)
 
 
-def _bound_root(plan, roots):
+def _bound_root(plan, roots, coverage=None):
     """Bind a complete no-op declaration/state/plan to exactly one selected root.
 
     These are fresh read-only state maps, not authority to replay ApplyState.
@@ -121,7 +155,8 @@ def _bound_root(plan, roots):
         for child in node['children']:
             visit(child,actual['id'])
     visit(declaration,None)
-    if (slot_ids != set(slots) or component_ids != set(components)
+    expected_slots, expected_components = coverage[ident] if coverage is not None else (set(slots),set(components))
+    if (slot_ids != expected_slots or component_ids != expected_components
             or set(state['slots']) != {k for kind,k in keys if kind == 'slot'}
             or set(state['components']) != {k for kind,k in keys if kind == 'component'}):
         raise ValueError('protected-diff-complete-coverage')
@@ -145,7 +180,8 @@ def validate_protected_diffs(baseline, supplied):
         return supplied
     roots = {r['id']:r for r in protection_roots(baseline)}
     try:
-        bound = [_bound_root(p,roots) for p in baseline.plans]
+        coverage = _diff_coverage(baseline.roots, baseline.diff_omitted_roots)
+        bound = [_bound_root(p,roots,coverage) for p in baseline.plans]
         if len(bound) != len(roots) or set(bound) != set(roots) or len(supplied) != len(bound):
             raise ValueError('protected-diff-root-coverage')
         for template, actual in zip(baseline.plans,supplied):
