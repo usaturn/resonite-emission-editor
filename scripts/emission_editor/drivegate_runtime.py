@@ -21,6 +21,7 @@ from .drivegate_evidence import (
 )
 from .read_receipts import ReadRequest, load_read, _decode, _digest, _write_new
 from .drivegate_capture import DiffRequest, assess_diff, load_diff
+from .drivegate_identity import NativeSessionEvidence, assess_native_session
 from .drivegate_protection import (
     ProtectedScope, protection_roots, protection_ids, compare_protection,
     compare_protection_scope, validate_protected_diffs,
@@ -337,6 +338,7 @@ class NativeDeployedStage(DeployedStage):
     native_layouts: dict
     native_library_path: Path
     native_sdk_directory: Path
+    native_session_evidence: NativeSessionEvidence | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -358,6 +360,14 @@ def assess_deployed_stage(package: Path, execution: Path, stage: DeployedStage) 
     """
     try:
         verify_package(package)
+        if isinstance(stage, NativeDeployedStage) and stage.native_session_evidence is not None:
+            evidence = stage.native_session_evidence
+            if (evidence.before_session != stage.before_session or evidence.after_session != stage.after_session
+                    or stage.protected_read not in evidence.reads):
+                return Verdict('failed', ('stage-native-session-bracket-binding',))
+            session = assess_native_session(evidence, window=stage.window, identity=stage.identity)
+            if session.status != 'passed':
+                return session
         observed = load_observation(stage.before_session, [stage.fixture_read, stage.protected_read],
                                     stage.after_session, window=stage.window, identity=stage.identity)
         if observed.status != "passed":
@@ -636,6 +646,26 @@ def assess_precreate_scope(package: Path, execution: Path, scope: PrecreateScope
     """
     try:
         verify_execution(package, execution)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        return _result(['missing:precreate-scope-evidence:' + str(exc)])
+    return _assess_precreate_evidence(package, scope)
+
+
+def assess_precreate_history(package: Path, execution: Path, scope: PrecreateScope) -> Verdict:
+    """Revalidate ORIGINAL precreate receipts after allowed runtime files exist.
+
+    This is historical scope evidence, never a fresh preflight or create permit.
+    Current state contents are not adopted; the created transition must separately
+    prove current ownership/initial values and absence-before for all native IDs.
+    """
+    immutable = verify_runtime_execution(package, execution)
+    if immutable.status != 'passed':
+        return immutable
+    return _assess_precreate_evidence(package, scope)
+
+
+def _assess_precreate_evidence(package, scope):
+    try:
         if len(scope.protected_reads) != 2 or scope.protected_reads[0][0] != scope.protected_reads[1][0]:
             return Verdict("inconclusive", ("missing:two-independent-protected-reads",))
         if (scope.parent_read[0].operation != "inspect" or scope.parent_read[0].target != "Root"

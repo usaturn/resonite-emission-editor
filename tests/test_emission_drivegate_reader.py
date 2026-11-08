@@ -122,6 +122,17 @@ def test_reader_rejects_changed_state_and_retains_failed_raw(tmp_path, monkeypat
     assert [r for r,_ in diffs] == [old.diff_request,*(p.request for p in stage.protected_baseline.plans)]
     assert len(success.protected_diffs) == 2
     assert all(p.directory.parent == tmp_path/'fresh' for p in success.protected_diffs)
+    # A source-identified bootstrap anchor must not silently degrade back to
+    # string-only session reads. This transport test still stubs native audit.
+    from scripts.emission_editor.drivegate_identity import NativeSessionEvidence
+    evidence = NativeSessionEvidence(tmp_path/'old-discover', stage.before_session,(),stage.after_session,
+                                     tmp_path/'old-discover-after','Reso_EA')
+    stage = replace(stage,native_session_evidence=evidence)
+    sourced = reader.collect_native_stage(package, execution, stage, tmp_path/'source-aware', cwd=tmp_path)
+    assert sourced.native_session_evidence.panel_id == evidence.panel_id
+    assert sourced.native_session_evidence.before_session == tmp_path/'source-aware/session-before'
+    assert [p.name for _,p in sourced.native_session_evidence.reads] == ['root-before','protected']
+    assert (tmp_path/'source-aware/discover-after/receipt.json').is_file()
     def changed_read(request, directory, *, cwd):
         result = fake_read(request, directory, cwd=cwd)
         old.diff_request.state.write_bytes(b'changed-state')

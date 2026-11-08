@@ -572,3 +572,12 @@ def test_precreate_scope_uses_absence_and_creation_plan_not_nonexistent_deployed
     assert runtime.assess_precreate_scope(package, execution, replace(scope, fixture_diff=templates[0])).status != "passed"
     # A single protected read is not the independent two-process observation.
     assert runtime.assess_precreate_scope(package, execution, replace(scope, protected_reads=[(pr, one)])).status != "passed"
+    # The same originals may be revalidated after creation, but the fresh-only
+    # entry must NOT silently bless state/replay as a new preflight.
+    state_path.parent.mkdir(parents=True)
+    state_path.write_bytes(state)
+    assert runtime.assess_precreate_scope(package, execution, scope).status != 'passed'
+    assert runtime.assess_precreate_history(package, execution, scope).status == 'passed'
+    assert runtime.assess_precreate_history(package, execution, replace(scope, fixture_diff=templates[0])).status != 'passed'
+    (execution / 'unknown.json').write_bytes(b'{}')
+    assert runtime.assess_precreate_history(package, execution, scope).status != 'passed'

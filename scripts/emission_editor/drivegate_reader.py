@@ -14,6 +14,7 @@ from pathlib import Path
 from .drivegate_capture import collect_diff
 from .drivegate_evidence import Verdict, ReadWindow, compare_subtree, compare_typed
 from .drivegate_layout import compare_native_layout
+from .drivegate_identity import NativeSessionEvidence
 from .drivegate_native import load_native_layout
 from .drivegate_package import MODULES, _no_links, verify_package
 from .drivegate_protection import ProtectedScope
@@ -132,14 +133,26 @@ def collect_native_stage(package: Path, execution: Path, anchor: NativeDeployedS
             'Root' if isinstance(protection,ProtectedScope) else protection['id'], 64)
         protected_diffs = tuple(replace(p,directory=directory/('protected-diff-'+str(i)))
             for i,p in enumerate(protection.plans)) if isinstance(protection,ProtectedScope) else ()
+        source_session = anchor.native_session_evidence
+        if source_session is not None and not isinstance(protection, ProtectedScope):
+            raise ValueError('reader-source-session-root-protection-required')
         started = datetime.now(UTC)
+        if source_session is not None:
+            collect_read(ReadRequest('discover', url), directory/'discover-before', cwd=cwd)
         collect_read(session_request, directory / 'session-before', cwd=cwd)
+        if source_session is not None:
+            collect_read(protected_request, directory/'root-before', cwd=cwd)
         fixture = collect_read(fixture_request, directory / 'fixture', cwd=cwd)
-        collect_read(protected_request, directory / 'protected', cwd=cwd)
+        if source_session is None:
+            collect_read(protected_request, directory / 'protected', cwd=cwd)
         collect_diff(anchor.diff_request, directory / 'diff', cwd=cwd)
         for entry in protected_diffs:
             collect_diff(entry.request, entry.directory, cwd=cwd)
+        if source_session is not None:
+            collect_read(protected_request, directory/'protected', cwd=cwd)
         collect_read(session_request, directory / 'session-after', cwd=cwd)
+        if source_session is not None:
+            collect_read(ReadRequest('discover', url), directory/'discover-after', cwd=cwd)
         finished = datetime.now(UTC)
         if state.read_bytes() != expected_state:
             raise ValueError('reader-checkpoint-state-changed')
@@ -158,7 +171,11 @@ def collect_native_stage(package: Path, execution: Path, anchor: NativeDeployedS
             diff_directory=directory/'diff', diff_request=anchor.diff_request, expected_state=expected_state,
             expected_plan=deepcopy(anchor.expected_plan), parsed_records=records, id_maps={}, roles=roles,
             native_layouts=layout_paths, native_library_path=anchor.native_library_path,
-            native_sdk_directory=anchor.native_sdk_directory, protected_diffs=protected_diffs)
+            native_sdk_directory=anchor.native_sdk_directory, protected_diffs=protected_diffs,
+            native_session_evidence=(NativeSessionEvidence(directory/'discover-before', directory/'session-before',
+                ((protected_request, directory/'root-before'), (protected_request, directory/'protected')),
+                directory/'session-after', directory/'discover-after', source_session.panel_id)
+                if source_session is not None else None))
         _save(directory / 'stage.json', asdict(stage))
         assessed = assess_deployed_stage(package, execution, stage)
         _save(directory / 'result.json', asdict(assessed))
