@@ -44,4 +44,12 @@ package は CLI / SDK の版、DLL 一式の SHA-256 による識別情報、準
 
 保全用の全 subtree 比較では、installed CLI の名前付き非有限値（JSON文字列の `Infinity` / `-Infinity` / `NaN`）、完全な RGBA と非空 profile 文字列、既知の `Array_float3` / `Array_floatQ` の全要素・軸・内外 ID を失わずに照合します。これらは保全専用であり、private writer の有限値・Linear / sRGB 判定を広げません。未知 kind、欠落、不完全な配列を一致扱いにはしません。
 
+### native layout のオフライン入力（Task2b-a）
+
+`scripts/emission_editor/drivegate_native.py` の `collect_native_layout(package, module, directory, library_path=..., sdk_directory=...)` は、検証済み package の PG と `tools/drivegate-native-layout/` を新規の checkout 外ディレクトリへコピーし、installed SDK の `Build.moduleCompiler` → `Link.batchAddProtoGraphNodes` を呼びます。.NET 10 SDK と、ResoLoop が使用する Flux SDK DLL ディレクトリを明示してください。SDK/native DLL の全 inventory、封印した PG、exporter のソース、実終了コード・stdout/stderr・全生成ファイルのハッシュを receipt に結びます。`load_native_layout` はそれらを再照合します。元 PG、package、実行コピーは変更しません。既存出力先を上書きせず、失敗した試行も残します。
+
+出力は passive metadata を含む全 AddSlot/AddComponent 操作です。private port は `private:<port>`、親は `native-layout-parent` の記号で、実 ID を指定・適用する入口はありません。link の初期化・Query・Loader を呼ばず、native 接続も行いません。未知の操作、所有外参照、入力/出力の改変、非 0 終了を成功にしません。
+
+`passed` は**オフライン生成証跡の検証だけ**です。未送信 member の native default、実機 ID/所有との対応、全 layout 比較、controller の自動回復・再試行への接続は未完了です。既存の runtime-only 比較器へ全 component を渡す問題は、この入口を足しただけでは解決していません。BSON の 3D 配置や metadata を native の期待値として丸写ししないための入力です。`nativeSucceeded` / `complete` / `executionPermission` は false のままです。
+
 この API は live 入口に接続しません。ビルド成功や Done だけで native 成功にはせず、`nativeSucceeded` / `complete` / `executionPermission` は常に false です。実機の保全、完全 preflight、各 phase の readback 判定は後続作業です。この短い gate は S4 全体や C9 / C30 / C23 / C31 の合格ではありません。
