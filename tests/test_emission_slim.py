@@ -18,12 +18,17 @@ def test_editing_assembly_keeps_each_rows_source_and_original_separate(tmp_path)
     source = Path(__file__).resolve().parents[1]
     document = slim.render_panel(plan,template=source/'content/emission-editor/registry.json')
     components = slim._components(document)
+    populated = {(key,member):value for key,member,value in slim.reference_values(plan)}
     bundle = slim.session_manifest(plan,world_state=tmp_path/'world.json',deploy_state=tmp_path/'flux.json',
         source_directory=tmp_path/'sources',source_root=source/'flux/emission-editor')
     instances = {(m['parent'],m['modules'][0]['module']):m['modules'][0]
                  for m in bundle['manifests']}
     for i,row in enumerate(rows):
         key = f'reg-{plan.generation}-row-{i}'
+        assert populated[(key+'-source','Reference')] == row.field_ref
+        assert populated[(key+'-current-copy','Source')] == row.field_ref
+        assert populated[(key+'-provider','Reference')] == row.material_ref
+        assert populated[(key+'-list-0','Reference')] == row.uses[0].list_ref
         for kind in ('RowPreview','RowCommand'):
             bindings = instances[('$slot:'+key,kind)]['bindings']
             assert bindings['SourceField'] == {'target':'$member:'+key+'-source.Reference','mode':'source'}

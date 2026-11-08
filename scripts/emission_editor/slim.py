@@ -39,7 +39,7 @@ def render_panel(registry, *, template):
     generation = next(n for n in registry_root['children'] if n['slot']['key'] == 'reg-' + registry.generation)
     components = _components(document)
     components['ui-title-text']['fields']['Content'] = '動作確認用・新パネル [' + registry.generation[:8] + ']'
-    components['ui-subtitle-text']['fields']['Content'] = 'RGB入力でライブ反映 · OK／キャンセル後は一覧から選び直してください'
+    components['ui-subtitle-text']['fields']['Content'] = 'RGB入力でライブ反映 · OK/キャンセル後は再選択 · 共有材は外部にも影響（未走査）'
     acquire = components['ui-acquire-label-text']
     acquire['initialFields'] = {'Content':acquire['fields'].pop('Content')}
     for i, row in enumerate(registry.rows):
@@ -66,6 +66,29 @@ def render_panel(registry, *, template):
                 remove_toggle(child)
         remove_toggle(document)
     return document
+
+
+def reference_values(registry):
+    """Bind every row to its own captured Source/provider/uses, never row zero."""
+    if not registry.complete or not registry.rows:
+        raise ValueError('incomplete-or-empty-registration')
+    prefix = 'reg-'+registry.generation
+    values = [(f'{prefix}-avatar-{i}','Reference',a.ref) for i,a in enumerate(registry.avatars)]
+    for i,row in enumerate(registry.rows):
+        key = f'{prefix}-row-{i}'
+        values += [(key+'-material','Reference',row.material_ref),
+                   (key+'-source','Reference',row.field_ref),
+                   (key+'-current-copy','Source',row.field_ref),
+                   (key+'-provider','Reference',row.material_ref)]
+        for j,use in enumerate(row.uses):
+            if use.material_ref != row.material_ref or not use.list_ref:
+                raise ValueError('unresolved-row-use')
+            values += [(key+f'-mesh-{j}','Reference',use.mesh_ref),
+                       (key+f'-renderer-{j}','Reference',use.renderer_ref),
+                       (key+f'-binding-{j}','Reference',use.binding_ref),
+                       (key+f'-list-{j}','Reference',use.list_ref),
+                       (key+f'-index-{j}','Value',use.material_index)]
+    return values
 
 
 def _globals(generation):

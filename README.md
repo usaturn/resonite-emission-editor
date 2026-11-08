@@ -2,7 +2,7 @@
 
 Resonite のアバター EmissionColor を編集するツールの、実験中のソースです。
 
-このパッケージはオフラインの検査と、明示した project context での宣言生成までです。live の inspect / register / unregister は無効です。実機への切替は別の計画と許可が要ります。
+旧CLI（`python -m scripts.emission_editor`）のlive inspect / register / unregisterは無効のままです。Issue #3で承認された単独パネル用の登録入口は、下記の`slim_live`です。登録時だけPCを使い、その後の通常操作はResonite内のnativeロジックで動きます。
 
 ## Issue #3: 最小実用版の作業範囲
 
@@ -20,11 +20,36 @@ uv run python -m scripts.emission_editor.slim_demo observe \
   --directory /absolute/new-demo-directory
 ```
 
-`prepare`は新しい試験用材質・共有メッシュ2個と、別所有の1行パネルだけを作ります。見本のメッシュはパネル右側に縦に並べて取り付け、パネルを動かしても一緒に移動します。配置調整は既存IDと材質の値を保ちます。試験用XiexeToonMaterialには白一色のSolidColorTextureをEmissionMapへ結び、EmissionColorの変化が描画にも出るようにします。この材質はEmissionMapが未設定だとEmissionColorだけでは発光しません（[Resonite Wiki](https://wiki.resonite.com/Component:XiexeToonMaterial)）。実アバターの発光マップを勝手に追加・変更する機能ではありません。既存アバター/保存済みパネルには書き込みません。既存UIとnativeのRowPreview/RowCommand/Commitを配備し、起動後はPC処理なしで編集できます。公開の汎用register入口は引き続き無効です。`observe`はこのパネルと試験材質の読み取りだけです。
+`prepare`は新しい試験用材質・共有メッシュ2個と、別所有の1行パネルだけを作ります。見本のメッシュはパネル右側に縦に並べて取り付け、パネルを動かしても一緒に移動します。配置調整は既存IDと材質の値を保ちます。試験用XiexeToonMaterialには白一色のSolidColorTextureをEmissionMapへ結び、EmissionColorの変化が描画にも出るようにします。この材質はEmissionMapが未設定だとEmissionColorだけでは発光しません（[Resonite Wiki](https://wiki.resonite.com/Component:XiexeToonMaterial)）。実アバターの発光マップを勝手に追加・変更する機能ではありません。既存アバター/保存済みパネルには書き込みません。既存UIとnativeのRowPreview/RowCommand/Commitを配備し、起動後はPC処理なしで編集できます。旧CLIのregisterは引き続き無効です。実アバターの明示登録は次節の`slim_live register`を使います。`observe`はこのパネルと試験材質の読み取りだけです。
 
 新しいパネルの見出しは「動作確認用・新パネル [登録ID]」です。開始ボタンは取得後に「開始済み」へ変わります。パネルの「編集を開始」→試験用対象を選択→RGB入力でライブ反映、「元に戻す」で編集継続、「キャンセル」で復元して終了、「OK」で変更を確定します。OKとキャンセルでは選択が外れて数値の行が隠れます。一覧から同じ対象を選び直すと、確定後の値または復元後の値を表示し、新しい編集を始めます。操作・見た目の確認はCLIの配備成功とは別です。保存/終了前にはOKかキャンセルを押してください。
 
 途中で失敗した場合は出力先を消して再実行せず、callsの実終了コードとstdout/stderr、作成されたpanel/fixtureのstateから適用状況を確認します。無条件の再送・自動rollbackは行いません。
+
+### 明示したアバターを新しいパネルへ登録する
+
+コードcheckoutで次を実行します。`--avatar`には、現在接続しているワールドのAvatarRootを持つSlotのIDまたは一意のpathを明示します。着用中アバターを推測して選ぶことはありません。出力先はまだ存在しないcheckout外のディレクトリにしてください。
+
+```bash
+uv run python -m scripts.emission_editor.slim_live register \
+  --url ws://localhost:<port> --library-path /absolute/current-managed-data \
+  --avatar '<AvatarRoot Slot ID or path>' --directory /absolute/new-registration-directory
+uv run python -m scripts.emission_editor.slim_live observe \
+  --directory /absolute/new-registration-directory
+```
+
+登録処理は指定アバター階層のMeshRenderer / SkinnedMeshRendererと、そこから参照される材質を読み、公開colorXのEmissionColorを参照IDごとに1行へまとめます。材質が階層外に保存されていても参照から読み取ります。既知の使用先は1材質あたり最大16件です。色の完全値と既知の参照を保持し、別所有の新パネルだけを作って参照を読み戻します。アバターの色・材質構成・親・メッシュには登録処理から書き込みません。準備中は編集を有効にせず、配備・既知参照の確認後に利用可能にします。
+
+新パネルの見出しは「アバター発光エディター [登録ID]」です。初期位置はRoot座標(0,1.5,1.5)で、`--position x y z`で変更できます。パネルはつかんで移動できます。「編集を開始」→一覧から対象を選択→各行のRGBを入力してください。HDRを切り詰めず、Alpha/profileは編集開始時の値を保ちます。「元に戻す」は選択対象の行を復元して編集継続、キャンセルは復元して終了、OKは変更を残して終了します。OK/キャンセルで選択が外れた後は、一覧から選び直します。
+
+制限は次のとおりです。
+
+- 1人・同じワールド用です。登録後の構成変更・参照失効・別ワールドでは再登録してください。保存/終了前はOKかキャンセルで終えます。同じ材質を別ツールと同時に編集しないでください。
+- 外部共有は走査していません。共有材質はアバター外にも影響する可能性があり、パネルにも警告を出します。未走査を外部共有なしとは扱いません。
+- 上記以外のレンダラーや公開colorX EmissionColorのない材質は対象外です。除外やEmissionMap未設定等の注意は出力先の`warnings.json`へ保存します。Xiexeの発光マップなど、描画に必要な設定は事前に用意してください。実アバターへ勝手に追加しません。
+- 二人操作・編集中保存/退出からの完全復旧・全材質型/全表示条件は保証しません。読取/配備/書込の失敗を成功とは報告しません。失敗した出力先を消して同じコマンドを再送せず、calls/stateから適用状況を確認してください。パネルと出力先は対応するため、後の調査用に残してください。
+
+2材質・各2共有メッシュの独立した試験パネルを用意する場合は、同じ引数の`register --avatar ...`を`demo`へ変えます。`--avatar`は不要です。見出しは「複数行確認・新パネル [登録ID]」で、右側に2列×2個の見本が付きます。左列が1行目、右列が2行目です。実アバターや以前のパネルは変更しません。
 
 元機能の設計・実装計画は `docs/superpowers/` にあります。Issue #3の現在の作業・検証方針は、create-reso-worldの`docs/superpowers/specs/2026-11-07-emission-issue-3-native-gate-design.md`と対応Planに定義します。
 

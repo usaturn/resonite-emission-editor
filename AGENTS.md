@@ -14,6 +14,7 @@
 
 create-reso-world の `docs/superpowers/specs/2026-11-07-emission-issue-3-native-gate-design.md`を、Issue #3の作業・検証方針の定義元とする。利用者がcommit `19870487`のA案（単独パネルを維持、最小の実用動作を優先）を選択した。このrepoの元機能Spec/Planや下記の過去の部分検証記録より、この簡略Spec/Planを優先する。専用Drivegate/fullpreflight/全native・全DLL照合/旧全465手順/指定モデルレビューは必須条件ではない。既存ガードを削除するだけの作業はせず、本体の実演を先に進める。
 
+- A案の明示登録入口は`python -m scripts.emission_editor.slim_live register`。指定アバターを読み取り、新しい所有パネルだけを作る。操作者取得と選択はResonite内の開始/選択ボタンで行い、CLIから実アバターやUser参照を直接書き換えない。旧`__main__`のlive入口は無効のまま。
 - Root全体の値の完全一致は不要。全Rootの時点差分だけを不合格/停止理由にしない。
 - 不一致・切断・検査失敗は、現在状態の確認と原因調査/修正/回復を行い、自動再試行する。初回でIssue全体を終了しない。write/deploy/削除は先に適用状況と所有を読み戻し、二重適用しない。
 - 保護範囲・比較対象の実質変更も、今回のIssue作業全体では利用者への追加確認不要。理由・対象・検証方法を記録して進める。セッション限定ではなく、Issue完了まで引き継ぐ。
