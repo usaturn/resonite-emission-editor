@@ -1,0 +1,62 @@
+module DriveGateProbe
+// Private fixture only. One host-only command entry, no frame/update processing.
+// Done is continuation evidence, not native success: inspect both outcomes and
+// complete native readbacks independently. An internal record failure stalls Done.
+in Command: int
+in Captured: bool mutable
+in BeforeColor: colorX mutable
+in BeforeBool: bool mutable
+in ColorTarget: colorX mutable
+in BoolTarget: bool mutable
+in ColorOutcome: int mutable
+in BoolOutcome: int mutable
+in ColorAfter: colorX mutable
+in BoolAfter: bool mutable
+in Done: int mutable
+where {
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    _srgb = IntToEnum<Renderite.Shared.ColorProfile>(1);
+    _a = Pack_ColorX(R=1.5, G=0.25, B=3.0, A=0.625, Profile=_linear);
+    _b = Pack_ColorX(R=0.875, G=5.5, B=0.0625, A=0.8125, Profile=_srgb);
+    _c = Pack_ColorX(R=2.5, G=0.75, B=0.125, A=0.375, Profile=_linear);
+    local _command: int;
+    _candidateColor = if _command == 2 then _a else if _command == 5 then _c
+        else if _command == 6 then BeforeColor else _b;
+    _candidateBool = if _command == 6 then BeforeBool else _command == 2;
+
+    _readback = impulse {
+        bind _r0 = (ColorAfter <- ColorTarget).OnWritten;
+        bind _r1 = (BoolAfter <- BoolTarget).OnWritten;
+        Done <- _command;
+    };
+    _boolWritten = switch (BoolOutcome <- 1) | OnWritten |> _readback;
+    _boolFailed = switch (BoolOutcome <- 2) | OnWritten |> _readback;
+    _writeBool = switch (BoolTarget <- _candidateBool)
+        | OnWritten |> _boolWritten
+        | OnFail |> _boolFailed;
+    _colorWritten = switch (ColorOutcome <- 1) | OnWritten |> _writeBool;
+    _colorFailed = switch (ColorOutcome <- 2) | OnWritten |> _writeBool;
+    _write = impulse {
+        bind _w0 = (ColorOutcome <- 0).OnWritten;
+        bind _w1 = (BoolOutcome <- 0).OnWritten;
+        switch (ColorTarget <- _candidateColor)
+            | OnWritten |> _colorWritten
+            | OnFail |> _colorFailed;
+    };
+    // Capture is refused after the first completed capture. It cannot replace
+    // Before with a driven/current value later in the sequence.
+    _capture = if not Captured then impulse {
+        bind _s0 = (BeforeColor <- ColorTarget).OnWritten;
+        bind _s1 = (BeforeBool <- BoolTarget).OnWritten;
+        bind _s2 = (Captured <- true).OnWritten;
+        _readback;
+    };
+    _dispatch = impulse {
+        _command <- Command;
+        if _command == 1 then _capture
+        else if Captured and _command >= 2 and _command <= 6 then _write;
+    };
+    // Command 0 and unknown commands are no-ops. Commands 3/4 use the same B;
+    // helper removal/ownership checks belong to the later external gate.
+    FireOnValueChange<int>(OnlyForUser=HostUser, Value=Command, OnChanged=_dispatch);
+}

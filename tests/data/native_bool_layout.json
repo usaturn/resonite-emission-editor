@@ -1,0 +1,490 @@
+{
+  "format": "emission-native-layout-v1",
+  "module": "BoolDrive",
+  "sdkVersion": "1.9.0\u002Be674229f9b959ac8e6615ff35a2cd1d7971503e8",
+  "operationCount": 19,
+  "operations": [
+    {
+      "data": {
+        "parent": {
+          "targetId": "native-layout-parent",
+          "targetType": null,
+          "id": null
+        },
+        "position": null,
+        "rotation": null,
+        "scale": null,
+        "isActive": null,
+        "isPersistent": null,
+        "name": {
+          "value": "BoolDrive",
+          "id": null
+        },
+        "tag": null,
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "00000008-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "containerSlotId": "00000008-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicVariableSpace",
+        "members": {
+          "SpaceName": {
+            "$type": "string",
+            "value": "ProtoGraphModule",
+            "id": null
+          },
+          "OnlyDirectBinding": {
+            "$type": "bool",
+            "value": true,
+            "id": null
+          }
+        },
+        "id": "00000009-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000008-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicReferenceVariable\u003C[FrooxEngine]FrooxEngine.Slot\u003E",
+        "members": {
+          "VariableName": {
+            "$type": "string",
+            "value": "ProtoGraphModule/ModuleSlot",
+            "id": null
+          },
+          "Reference": {
+            "$type": "reference",
+            "targetId": "00000008-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": null
+          },
+          "OverrideOnLink": {
+            "$type": "bool",
+            "value": false,
+            "id": null
+          }
+        },
+        "id": "0000000a-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "data": {
+        "parent": {
+          "targetId": "00000008-ffff-ffff-0000-000000000000",
+          "targetType": null,
+          "id": null
+        },
+        "position": null,
+        "rotation": null,
+        "scale": null,
+        "isActive": null,
+        "isPersistent": null,
+        "name": {
+          "value": "Assets: Heap",
+          "id": null
+        },
+        "tag": null,
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "0000000b-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "data": {
+        "parent": {
+          "targetId": "00000008-ffff-ffff-0000-000000000000",
+          "targetType": null,
+          "id": null
+        },
+        "position": null,
+        "rotation": null,
+        "scale": null,
+        "isActive": {
+          "value": false,
+          "id": null
+        },
+        "isPersistent": null,
+        "name": {
+          "value": "Assets: Templates",
+          "id": null
+        },
+        "tag": null,
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "0000000e-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "data": {
+        "parent": {
+          "targetId": "0000000e-ffff-ffff-0000-000000000000",
+          "targetType": null,
+          "id": null
+        },
+        "position": null,
+        "rotation": null,
+        "scale": null,
+        "isActive": null,
+        "isPersistent": null,
+        "name": {
+          "value": "EmptySlot",
+          "id": null
+        },
+        "tag": null,
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "0000000c-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "data": {
+        "parent": {
+          "targetId": "0000000e-ffff-ffff-0000-000000000000",
+          "targetType": null,
+          "id": null
+        },
+        "position": null,
+        "rotation": null,
+        "scale": null,
+        "isActive": null,
+        "isPersistent": null,
+        "name": {
+          "value": "EmptyDynamicRecord",
+          "id": null
+        },
+        "tag": null,
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "0000000d-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "containerSlotId": "0000000d-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicVariableSpace",
+        "members": {
+          "SpaceName": {
+            "$type": "string",
+            "value": null,
+            "id": null
+          }
+        },
+        "id": "0000000f-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000008-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicReferenceVariable\u003C[FrooxEngine]FrooxEngine.Slot\u003E",
+        "members": {
+          "VariableName": {
+            "$type": "string",
+            "value": "ProtoGraphModule/Heap",
+            "id": null
+          },
+          "Reference": {
+            "$type": "reference",
+            "targetId": "0000000b-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": null
+          },
+          "OverrideOnLink": {
+            "$type": "bool",
+            "value": false,
+            "id": null
+          }
+        },
+        "id": "00000010-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000008-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicReferenceVariable\u003C[FrooxEngine]FrooxEngine.Slot\u003E",
+        "members": {
+          "VariableName": {
+            "$type": "string",
+            "value": "ProtoGraphModule/Template.EmptySlot",
+            "id": null
+          },
+          "Reference": {
+            "$type": "reference",
+            "targetId": "0000000c-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": null
+          },
+          "OverrideOnLink": {
+            "$type": "bool",
+            "value": false,
+            "id": null
+          }
+        },
+        "id": "00000011-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000008-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicReferenceVariable\u003C[FrooxEngine]FrooxEngine.Slot\u003E",
+        "members": {
+          "VariableName": {
+            "$type": "string",
+            "value": "ProtoGraphModule/Template.EmptyDynamicRecord",
+            "id": null
+          },
+          "Reference": {
+            "$type": "reference",
+            "targetId": "0000000d-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": null
+          },
+          "OverrideOnLink": {
+            "$type": "bool",
+            "value": false,
+            "id": null
+          }
+        },
+        "id": "00000012-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "data": {
+        "parent": {
+          "targetId": "00000008-ffff-ffff-0000-000000000000",
+          "targetType": null,
+          "id": null
+        },
+        "position": {
+          "value": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "id": null
+        },
+        "rotation": null,
+        "scale": null,
+        "isActive": null,
+        "isPersistent": null,
+        "name": {
+          "value": "Driven",
+          "id": null
+        },
+        "tag": {
+          "value": "BoolDrive(5:14 to 5:18)",
+          "id": null
+        },
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "00000013-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "containerSlotId": "00000013-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput\u003Cbool\u003E",
+        "members": {
+          "Value": {
+            "$type": "bool",
+            "value": true,
+            "id": "00000002-ffff-ffff-0000-000000000000"
+          }
+        },
+        "id": "00000001-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "data": {
+        "parent": {
+          "targetId": "00000008-ffff-ffff-0000-000000000000",
+          "targetType": null,
+          "id": null
+        },
+        "position": {
+          "value": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "id": null
+        },
+        "rotation": null,
+        "scale": null,
+        "isActive": null,
+        "isPersistent": null,
+        "name": {
+          "value": "Output:Driven",
+          "id": null
+        },
+        "tag": {
+          "value": "BoolDrive(3:5 to 3:11)",
+          "id": null
+        },
+        "orderOffset": null,
+        "components": null,
+        "children": null,
+        "id": "00000014-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddSlot"
+    },
+    {
+      "containerSlotId": "00000014-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueFieldDrive\u003Cbool\u003E",
+        "members": {
+          "Value": {
+            "$type": "reference",
+            "targetId": "00000001-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": "00000007-ffff-ffff-0000-000000000000"
+          }
+        },
+        "id": "00000006-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000014-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.ProtoFlux.CoreNodes.FieldDriveBase\u003Cbool\u003E\u002BProxy",
+        "members": {
+          "Drive": {
+            "$type": "reference",
+            "targetId": "private:Driven",
+            "targetType": null,
+            "id": "00000003-ffff-ffff-0000-000000000000"
+          },
+          "Node": {
+            "$type": "reference",
+            "targetId": "00000006-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": null
+          }
+        },
+        "id": "00000004-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000014-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicVariableSpace",
+        "members": {
+          "SpaceName": {
+            "$type": "string",
+            "value": "ProtoGraph",
+            "id": null
+          }
+        },
+        "id": "00000015-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000014-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicReferenceVariable\u003C[FrooxEngine]FrooxEngine.IWorldElement\u003E",
+        "members": {
+          "VariableName": {
+            "$type": "string",
+            "value": "ProtoGraph/Target",
+            "id": null
+          },
+          "Reference": {
+            "$type": "reference",
+            "targetId": "00000003-ffff-ffff-0000-000000000000",
+            "targetType": null,
+            "id": null
+          },
+          "OverrideOnLink": {
+            "$type": "bool",
+            "value": false,
+            "id": null
+          }
+        },
+        "id": "00000005-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    },
+    {
+      "containerSlotId": "00000014-ffff-ffff-0000-000000000000",
+      "data": {
+        "componentType": "[FrooxEngine]FrooxEngine.DynamicTypeVariable",
+        "members": {
+          "VariableName": {
+            "$type": "string",
+            "value": "ProtoGraph/Type",
+            "id": null
+          },
+          "Value": {
+            "$type": "type",
+            "type": "bool",
+            "id": null
+          }
+        },
+        "id": "00000016-ffff-ffff-0000-000000000000",
+        "isReferenceOnly": false
+      },
+      "messageId": null,
+      "operation": "AddComponent"
+    }
+  ]
+}

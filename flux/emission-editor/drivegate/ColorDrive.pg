@@ -1,0 +1,7 @@
+module ColorDrive
+// Eventless private-fixture Drive. Removed only by the later owned-subtree gate.
+out Driven: colorX
+where {
+    _linear = IntToEnum<Renderite.Shared.ColorProfile>(0);
+    Driven = Pack_ColorX(R=1.5, G=0.25, B=3.0, A=0.625, Profile=_linear);
+}

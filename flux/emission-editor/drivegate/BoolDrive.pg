@@ -1,0 +1,6 @@
+module BoolDrive
+// Eventless private-fixture Drive. No event entry or per-frame write.
+out Driven: bool
+where {
+    Driven = true;
+}
