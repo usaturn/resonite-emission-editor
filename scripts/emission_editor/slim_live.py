@@ -126,6 +126,12 @@ def create_panel(root, client, plan, warnings, position, *, saved_fixture=None, 
     template['children'] = [n for n in template['children'] if n['slot']['key']!='fixture-root']
     _save(root/'template.json',template)
     panel = slim.render_panel(plan,template=root/'template.json')
+    # UIX input macros add JSON nodes after rendering. Keep a proportional
+    # authoring budget for real multi-material avatars, within the CLI cap.
+    def json_nodes(value):
+        children = value.values() if isinstance(value,dict) else value if isinstance(value,list) else ()
+        return 1+sum(json_nodes(child) for child in children)
+    panel['limits'] = {'expandedNodes':min(250000,max(10000,2*json_nodes(panel)))}
     panel['ownership']['key'] = 'emission-slim-panel-'+plan.generation
     panel['slot'].update(name='ResoLoop_Test_EmissionEditor_Slim_'+plan.generation,position=position)
     title = ('複数行確認・新パネル' if declaration else 'アバター発光エディター')+' ['+plan.generation+']'
