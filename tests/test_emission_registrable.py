@@ -106,6 +106,7 @@ class _FakeDemo:
     """Records the calls create_panel makes; never talks to Resonite."""
 
     instances = []
+    latency_ms = 100.0
 
     def __init__(self, directory, url, library):
         self.directory = Path(directory)
@@ -117,8 +118,13 @@ class _FakeDemo:
 
     def run(self, *args):
         self.calls.append(args)
+        if args[0] == "status":
+            return {"connected": True, "latencyMs": type(self).latency_ms}
         if args[0] == "doctor":
             return {"ready": True}
+        if args[0] == "inspect":
+            panel = json.loads((self.directory / "panel.json").read_bytes())
+            return {"id": args[1], "name": panel["slot"]["name"], "parentId": "Root"}
         if args[0] == "apply":
             panel = json.loads(Path(args[1]).read_bytes())
             state = Path(args[args.index("--state") + 1])
@@ -128,6 +134,13 @@ class _FakeDemo:
             }))
             return {}
         if args[0] == "flux" and args[1] == "deploy-manifest":
+            manifest = json.loads(Path(args[2]).read_bytes())
+            name = manifest["modules"][0]["name"]
+            state_path = Path(manifest["deployState"])
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state = json.loads(state_path.read_bytes()) if state_path.exists() else {"modules": {}}
+            state.setdefault("modules", {})[name] = {"slotId": "fake"}
+            state_path.write_text(json.dumps(state))
             return {"success": True}
         return {}
 
@@ -153,3 +166,60 @@ def test_create_panel_writes_only_ready_flags(monkeypatch, tmp_path):
         ("ui-runtime-ready", "Value", True),
     ]
     assert any(call[:2] == ("flux", "deploy-manifest") for call in client.calls)
+
+
+def test_no_modules_then_deploy_and_finalize(monkeypatch, tmp_path):
+    """Readiness must stay off until every staged deploy is recorded."""
+    _FakeDemo.instances.clear()
+    monkeypatch.setattr(registrable, "Demo", _FakeDemo)
+    directory = tmp_path / "panel"
+    created = registrable.create_panel(
+        directory, "ws://127.0.0.1:1", tmp_path / "library", [0, 1.5, 1.5],
+        rows=1, deploy_modules=False,
+    )
+    assert created["ready"] is False
+    assert created["modulesDeployed"] == 0
+    assert created["modulesTotal"] == 9
+    assert not any(call[:2] == ("flux", "deploy-manifest") for call in _FakeDemo.instances[0].calls)
+    assert (directory / "module-08.json").exists()
+
+    registrable.deploy_panel(
+        directory, "ws://127.0.0.1:1", tmp_path / "library", from_index=0, count=1,
+    )
+    assert _FakeDemo.instances[-1].writes == []
+    registrable.deploy_panel(
+        directory, "ws://127.0.0.1:1", tmp_path / "library", from_index=1,
+    )
+    assert _FakeDemo.instances[-1].writes == []
+    registrable.finalize_panel(directory, "ws://127.0.0.1:1", tmp_path / "library")
+    assert _FakeDemo.instances[-1].writes == [
+        ("registry-ready", "Value", True),
+        ("ui-runtime-ready", "Value", True),
+    ]
+    assert (directory / "finalized.json").exists()
+
+
+def test_finalize_refuses_missing_modules(monkeypatch, tmp_path):
+    """Readiness must not be enabled when a staged deploy is missing."""
+    _FakeDemo.instances.clear()
+    monkeypatch.setattr(registrable, "Demo", _FakeDemo)
+    directory = tmp_path / "panel"
+    registrable.create_panel(
+        directory, "ws://127.0.0.1:1", tmp_path / "library", [0, 1.5, 1.5],
+        rows=1, deploy_modules=False,
+    )
+    with pytest.raises(ValueError):
+        registrable.finalize_panel(directory, "ws://127.0.0.1:1", tmp_path / "library")
+    assert _FakeDemo.instances[-1].writes == []
+
+
+def test_health_check_stops_before_deploy_on_latency_spike(monkeypatch, tmp_path):
+    """A latency spike must stop the run before any module is deployed."""
+    _FakeDemo.instances.clear()
+    monkeypatch.setattr(registrable, "Demo", _FakeDemo)
+    monkeypatch.setattr(_FakeDemo, "latency_ms", 5000.0)
+    with pytest.raises(RuntimeError):
+        registrable.create_panel(
+            tmp_path / "panel", "ws://127.0.0.1:1", tmp_path / "library", [0, 1.5, 1.5],
+        )
+    assert not any(call[:2] == ("flux", "deploy-manifest") for call in _FakeDemo.instances[0].calls)

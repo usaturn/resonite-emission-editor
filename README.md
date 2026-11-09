@@ -73,6 +73,32 @@ uv run python -m scripts.emission_editor.registrable create \
 
 作成したパネルは、**「編集を開始」を押す前**にインベントリへ保存してください。開始後は操作者参照がパネルに残るため、初期保存版の「操作者未取得」を保てません。
 
+### 段階的な配備（事故後の安全手順）
+
+`create` は `--rows`（1〜16）、`--no-modules`、`--pause-seconds`、`--health-latency-ms` を受け付けます。大きなパネルを一度に配備せず、次の順で進めます。
+
+```bash
+# 1. 1 行・モジュールなしで作成する
+uv run python -m scripts.emission_editor.registrable create \
+  --url ws://localhost:<port> --library-path /absolute/current-managed-data \
+  --directory /absolute/new-registrable-directory --rows 1 --no-modules
+
+# 2. 1 モジュールずつ配備する（from-index は 0 始まり）
+uv run python -m scripts.emission_editor.registrable deploy \
+  --url ws://localhost:<port> --library-path /absolute/current-managed-data \
+  --directory /absolute/new-registrable-directory --from-index 0 --count 1 --pause-seconds 5
+# 残りは --from-index 1、2、… と進める
+
+# 3. 全モジュールの deploy state が揃ったことを確認して readiness を有効化する
+uv run python -m scripts.emission_editor.registrable finalize \
+  --url ws://localhost:<port> --library-path /absolute/current-managed-data \
+  --directory /absolute/new-registrable-directory
+```
+
+各 deploy の後に `status` の接続と latency を確認します（既定は 3000 ms 超で停止）。`finalize` は、全モジュールが deploy state に記録されていないと readiness を有効化しません。タイムアウト、latency 超過、階層読み取り失敗が出たら、同じ操作を再送せず停止してください。
+
+1 行でドロップ・選択・RGB 編集・元に戻す・OK を確認できてから、`--rows 8`、`--rows 16` の順に増やします。16 行を一度に作らないでください。
+
 ### 使い方
 
 1. パネルを取り出し、「編集を開始」で操作者を取得します。

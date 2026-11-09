@@ -12,6 +12,7 @@ the native modules is the same validated/deployed manifest flow as slim.py.
 import argparse
 import json
 import shutil
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -337,8 +338,10 @@ def session_manifest(*, rows, world_state, deploy_state, source_directory, sourc
     for i in range(rows):
         p = f'rp-{i}'
         others = {}
-        for j in range(rows):
-            others[f'Other{j}'] = field(f'rp-{j}-dropped') if j != i else field('ui-null-element')
+        for j in range(POOL_ROWS):
+            others[f'Other{j}'] = (
+                field(f'rp-{j}-dropped') if j < rows and j != i else field('ui-null-element')
+            )
         add(p + '-guard', 'RowGuard', p, {
             'Dropped': field(p + '-dropped'),
             **others,
@@ -557,8 +560,82 @@ def session_manifest(*, rows, world_state, deploy_state, source_directory, sourc
     return {'format': 'emission-registrable-manifest-bundle-v1', 'manifests': manifests}
 
 
-def create_panel(directory, url, library, position):
-    """Apply a NEW unregistered panel and deploy its native modules; no material writes."""
+def _health(client, limit_ms):
+    """Stop on a lost connection or a latency spike before the next live step."""
+    data = client.run('status')
+    if data.get('connected') is not True:
+        raise RuntimeError('health-check-not-connected')
+    latency = data.get('latencyMs')
+    if isinstance(latency, (int, float)) and latency > limit_ms:
+        raise RuntimeError(f'health-check-latency:{latency:.0f}>{limit_ms:.0f}')
+
+
+def _write_manifests(root, bundle):
+    paths = []
+    for i, manifest in enumerate(bundle['manifests']):
+        path = root / f'module-{i:02d}.json'
+        if path.exists():
+            if json.loads(path.read_bytes()) != manifest:
+                raise ValueError('module-manifest-mismatch:' + str(path))
+        else:
+            _save(path, manifest)
+        paths.append(path)
+    return paths
+
+
+def _verify_panel(client, panel, saved):
+    root_id = saved.get('slots', {}).get('emission-root', {}).get('id')
+    if not root_id:
+        raise ValueError('panel-root-missing')
+    data = client.run('inspect', root_id)
+    if data.get('id') != root_id or data.get('name') != panel['slot']['name'] \
+            or data.get('parentId') != 'Root':
+        raise ValueError('panel-root-mismatch')
+    return root_id
+
+
+def _deploy_one(client, path, manifest, *, pause_seconds, health_latency_ms):
+    client.run('flux', 'validate-manifest', path, '--library-path', client.library)
+    result = client.run('flux', 'deploy-manifest', path, '--library-path', client.library)
+    name = manifest['modules'][0]['name']
+    if result.get('success') is not True:
+        raise ValueError('native-module-deployment-failed:' + name)
+    deploy_state = Path(manifest['deployState'])
+    if not deploy_state.exists():
+        raise ValueError('deploy-state-missing:' + str(deploy_state))
+    state = json.loads(deploy_state.read_bytes())
+    if name not in state.get('modules', {}):
+        raise ValueError('deploy-state-missing-module:' + name)
+    _health(client, health_latency_ms)
+    if pause_seconds > 0:
+        time.sleep(pause_seconds)
+
+
+def _finalize(client, panel, saved, bundle, state_path, health_latency_ms):
+    missing = []
+    for manifest in bundle['manifests']:
+        name = manifest['modules'][0]['name']
+        deploy_state = Path(manifest['deployState'])
+        if not deploy_state.exists():
+            missing.append(name)
+            continue
+        state = json.loads(deploy_state.read_bytes())
+        if name not in state.get('modules', {}):
+            missing.append(name)
+    if missing:
+        raise ValueError('not-all-modules-deployed:' + ','.join(missing))
+    _verify_panel(client, panel, saved)
+    for target in ('registry-ready', 'ui-runtime-ready'):
+        client.set(state_path, target, 'Value', True)
+    _health(client, health_latency_ms)
+
+
+def create_panel(directory, url, library, position, *, rows=POOL_ROWS,
+                 deploy_modules=True, pause_seconds=0.0,
+                 health_latency_ms=3000.0):
+    """Apply a NEW unregistered panel; optionally deploy modules with health gates."""
+    if rows < 1 or rows > POOL_ROWS:
+        raise ValueError('row-pool-limit')
     root = Path(directory).absolute()
     if root.resolve().is_relative_to(CODE_ROOT):
         raise ValueError('output-must-be-outside-checkout')
@@ -566,10 +643,11 @@ def create_panel(directory, url, library, position):
     client = Demo(root, url, library)
     if not client.run('doctor', '--library-path', client.library).get('ready'):
         raise ValueError('doctor-not-ready')
+    _health(client, health_latency_ms)
     token = uuid4().hex[:8]
-    panel = build_panel(token=token, position=position)
+    panel = build_panel(token=token, position=position, rows=rows)
     # UIX input recipes add JSON nodes after rendering. Keep a proportional
-    # authoring budget for the 16-row pool, within the CLI cap.
+    # authoring budget for the row pool, within the CLI cap.
     def json_nodes(value):
         children = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
         return 1 + sum(json_nodes(child) for child in children)
@@ -580,32 +658,100 @@ def create_panel(directory, url, library, position):
     saved = json.loads(state.read_bytes())
     if saved['ownershipKey'] != panel['ownership']['key']:
         raise ValueError('new-panel-ownership-mismatch')
+    _verify_panel(client, panel, saved)
+    _health(client, health_latency_ms)
     bundle = session_manifest(
-        rows=POOL_ROWS, world_state=state, deploy_state=root / 'flux-state.json',
+        rows=rows, world_state=state, deploy_state=root / 'flux-state.json',
         source_directory=root / 'sources', source_root=CODE_ROOT / 'flux/emission-editor',
     )
     _save(root / 'bundle.json', bundle)
-    for i, manifest in enumerate(bundle['manifests']):
-        path = root / f'module-{i:02d}.json'
-        _save(path, manifest)
-        client.run('flux', 'validate-manifest', path, '--library-path', client.library)
-        result = client.run('flux', 'deploy-manifest', path, '--library-path', client.library)
-        if result.get('success') is not True:
-            raise ValueError('native-module-deployment-failed')
-        print('deployed ' + manifest['modules'][0]['module'], flush=True)
-    for target, value in [('registry-ready', True), ('ui-runtime-ready', True)]:
-        client.set(state, target, 'Value', value)
+    paths = _write_manifests(root, bundle)
+    deployed = 0
+    if deploy_modules:
+        for path, manifest in zip(paths, bundle['manifests']):
+            _deploy_one(client, path, manifest,
+                        pause_seconds=pause_seconds, health_latency_ms=health_latency_ms)
+            deployed += 1
+            print('deployed ' + manifest['modules'][0]['module'], flush=True)
+        _finalize(client, panel, saved, bundle, state, health_latency_ms)
     summary = {
         'url': url,
         'library': str(Path(library).resolve()),
         'panelRoot': saved['slots']['emission-root']['id'],
         'panelName': panel['slot']['name'],
         'ownershipKey': panel['ownership']['key'],
-        'rows': POOL_ROWS,
-        'ready': True,
+        'rows': rows,
+        'modulesTotal': len(paths),
+        'modulesDeployed': deployed,
+        'ready': deploy_modules,
         'manualOperationVerified': False,
     }
     _save(root / 'deployment.json', summary)
+    return summary
+
+
+def deploy_panel(directory, url, library, *, from_index=0, count=None,
+                 pause_seconds=0.0, health_latency_ms=3000.0):
+    """Deploy a selected range of an existing panel's manifests with health gates."""
+    root = Path(directory).resolve()
+    panel = json.loads((root / 'panel.json').read_bytes())
+    saved = json.loads((root / 'panel-state.json').read_bytes())
+    bundle = json.loads((root / 'bundle.json').read_bytes())
+    if saved.get('ownershipKey') != panel['ownership']['key']:
+        raise ValueError('panel-ownership-mismatch')
+    manifests = bundle['manifests']
+    if from_index < 0 or from_index >= len(manifests):
+        raise ValueError('from-index-out-of-range')
+    if count is None:
+        end = len(manifests)
+    else:
+        if count < 1:
+            raise ValueError('count-out-of-range')
+        end = min(len(manifests), from_index + count)
+    client = Demo(root, url, library)
+    if not client.run('doctor', '--library-path', client.library).get('ready'):
+        raise ValueError('doctor-not-ready')
+    _health(client, health_latency_ms)
+    _verify_panel(client, panel, saved)
+    paths = _write_manifests(root, bundle)
+    deployed = 0
+    for i in range(from_index, end):
+        _deploy_one(client, paths[i], manifests[i],
+                    pause_seconds=pause_seconds, health_latency_ms=health_latency_ms)
+        deployed += 1
+        print('deployed ' + manifests[i]['modules'][0]['module'], flush=True)
+    summary = {
+        'url': url,
+        'panelRoot': saved['slots']['emission-root']['id'],
+        'panelName': panel['slot']['name'],
+        'fromIndex': from_index,
+        'toIndex': end,
+        'modulesDeployed': deployed,
+    }
+    _save(root / f'deployment-{from_index:03d}-{end:03d}.json', summary)
+    return summary
+
+
+def finalize_panel(directory, url, library, *, health_latency_ms=3000.0):
+    """Enable readiness only after every manifest's module is recorded as deployed."""
+    root = Path(directory).resolve()
+    panel = json.loads((root / 'panel.json').read_bytes())
+    saved = json.loads((root / 'panel-state.json').read_bytes())
+    bundle = json.loads((root / 'bundle.json').read_bytes())
+    if saved.get('ownershipKey') != panel['ownership']['key']:
+        raise ValueError('panel-ownership-mismatch')
+    client = Demo(root, url, library)
+    if not client.run('doctor', '--library-path', client.library).get('ready'):
+        raise ValueError('doctor-not-ready')
+    _health(client, health_latency_ms)
+    _finalize(client, panel, saved, bundle, root / 'panel-state.json', health_latency_ms)
+    summary = {
+        'url': url,
+        'panelRoot': saved['slots']['emission-root']['id'],
+        'panelName': panel['slot']['name'],
+        'ready': True,
+    }
+    _save(root / 'finalized.json', summary)
     return summary
 
 
@@ -617,8 +763,41 @@ def main():
     create.add_argument('--url', required=True)
     create.add_argument('--library-path', type=Path, required=True)
     create.add_argument('--position', nargs=3, type=float, default=[0, 1.5, 1.5])
+    create.add_argument('--rows', type=int, choices=range(1, POOL_ROWS + 1), default=POOL_ROWS)
+    create.add_argument('--no-modules', action='store_true')
+    create.add_argument('--pause-seconds', type=float, default=0.0)
+    create.add_argument('--health-latency-ms', type=float, default=3000.0)
+    deploy = commands.add_parser('deploy')
+    deploy.add_argument('--directory', type=Path, required=True)
+    deploy.add_argument('--url', required=True)
+    deploy.add_argument('--library-path', type=Path, required=True)
+    deploy.add_argument('--from-index', type=int, default=0)
+    deploy.add_argument('--count', type=int)
+    deploy.add_argument('--pause-seconds', type=float, default=0.0)
+    deploy.add_argument('--health-latency-ms', type=float, default=3000.0)
+    finalize = commands.add_parser('finalize')
+    finalize.add_argument('--directory', type=Path, required=True)
+    finalize.add_argument('--url', required=True)
+    finalize.add_argument('--library-path', type=Path, required=True)
+    finalize.add_argument('--health-latency-ms', type=float, default=3000.0)
     args = parser.parse_args()
-    result = create_panel(args.directory, args.url, args.library_path, args.position)
+    if args.command == 'create':
+        result = create_panel(
+            args.directory, args.url, args.library_path, args.position,
+            rows=args.rows, deploy_modules=not args.no_modules,
+            pause_seconds=args.pause_seconds, health_latency_ms=args.health_latency_ms,
+        )
+    elif args.command == 'deploy':
+        result = deploy_panel(
+            args.directory, args.url, args.library_path,
+            from_index=args.from_index, count=args.count,
+            pause_seconds=args.pause_seconds, health_latency_ms=args.health_latency_ms,
+        )
+    else:
+        result = finalize_panel(
+            args.directory, args.url, args.library_path,
+            health_latency_ms=args.health_latency_ms,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
