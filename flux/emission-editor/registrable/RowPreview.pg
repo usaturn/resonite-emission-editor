@@ -1,0 +1,213 @@
+module RowPreview
+// Issue #6: per-row live preview for a field dropped by the user. The editing
+// target is CapturedField; a later drop into the row does not change it. The
+// renderer/use guard of Issue #3 is not available (components cannot be
+// enumerated natively), so the write is guarded by the captured field identity
+// and the 5-component readback. Registration itself writes no material value.
+in ActiveGeneration: bool
+in Selected: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Ready: bool
+in Busy: bool
+in Intent: int
+in CommandKind: int
+in OperationStage: int
+in EditEpoch: int
+in SnapshotEpoch: int
+in InputR: string
+in InputG: string
+in InputB: string
+in Valid: bool
+in Draft: colorX
+in SourceField: FrooxEngine.IValue<colorX>
+in CapturedField: FrooxEngine.IValue<colorX>
+in Registered: bool
+in Duplicate: bool
+in LastApplied: colorX mutable
+in PreviewWritten: bool mutable
+in PreviewActive: bool mutable
+in RecoveryPending: bool mutable
+in RowPending: bool mutable
+in InputSeq: int mutable
+in AppliedSeq: int mutable
+in Result: int mutable
+in ResultSeq: int mutable
+in OpStage: int mutable
+in OpKind: int mutable
+in OpSeq: int mutable
+in OpId: int mutable
+in PendingPrevious: colorX mutable
+in PendingCandidate: colorX mutable
+where {
+    // Result codes: 0 UNCHANGED, 1 PREVIEWED, 10 INVALID, 11 BLOCKED, 12 CONFLICT, 13 GUARD,
+    // 20 FAILED, 21 STATE_FAILED. OpStage: 0 idle, 1 prepared (may have written), 2 OnWritten received.
+    _source = FieldAsVariable<colorX>(Field=CapturedField);
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(CapturedField));
+
+    // eq(a, b): R, G, B, A and Profile compared individually (never colorX == alone).
+    _dp = Unpack_ColorX(V=Draft);
+    _lp = Unpack_ColorX(V=LastApplied);
+    _fp = Unpack_ColorX(V=_fresh);
+    _cp = Unpack_ColorX(V=PendingCandidate);
+    _pp = Unpack_ColorX(V=PendingPrevious);
+    _draftIsLast = _dp.R == _lp.R and _dp.G == _lp.G and _dp.B == _lp.B and _dp.A == _lp.A and _dp.Profile == _lp.Profile;
+    _freshIsLast = _fp.R == _lp.R and _fp.G == _lp.G and _fp.B == _lp.B and _fp.A == _lp.A and _fp.Profile == _lp.Profile;
+    _freshIsCandidate = _fp.R == _cp.R and _fp.G == _cp.G and _fp.B == _cp.B and _fp.A == _cp.A
+        and _fp.Profile == _cp.Profile;
+    _freshIsPrevious = _fp.R == _pp.R and _fp.G == _pp.G and _fp.B == _pp.B and _fp.A == _pp.A
+        and _fp.Profile == _pp.Profile;
+
+    // The editing target must still be the field captured for this row. If the
+    // user dropped a different reference after selection, refuse (13) rather
+    // than write to an unregistered target.
+    _guard = Registered and not Duplicate
+        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=CapturedField);
+
+    local _seq: int;
+    local _epoch: int;
+
+    // (7) A record write failed: try STATE_FAILED, and once a write may have happened stop OK/switching.
+    _sfRow = RowPending <- true;
+    _sfFlags = if OpStage >= 1 then switch (RecoveryPending <- true)
+        | OnWritten |> _sfRow
+        | OnFail |> _sfRow;
+    _stateFailed = switch (Result <- 21)
+        | OnWritten |> _sfFlags
+        | OnFail |> _sfFlags;
+
+    // Refusals: the Source is not written; the request is still marked processed (ResultSeq <- seq).
+    _refusedSeq = switch (ResultSeq <- _seq)
+        | OnFail |> _stateFailed;
+    _rejInvalid = switch (Result <- 10)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+    _rejBlocked = switch (Result <- 11)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+    _rejConflict = switch (Result <- 12)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+    _rejGuard = switch (Result <- 13)
+        | OnWritten |> _refusedSeq
+        | OnFail |> _stateFailed;
+
+    // (5) Draft == LastApplied: nothing to write. A refusal code (10..13) returns to PREVIEWED / UNCHANGED,
+    // except on a RowPending row, which keeps the reason of its pending restore.
+    _resetCode = Result >= 10 and Result <= 13 and not RowPending;
+    _uSeq = switch (ResultSeq <- _seq)
+        | OnFail |> _stateFailed;
+    _uReset = if _resetCode then switch (Result <- (if PreviewWritten then 1 else 0))
+        | OnWritten |> _uSeq
+        | OnFail |> _stateFailed
+        else _uSeq;
+    _unchanged = switch (AppliedSeq <- _seq)
+        | OnWritten |> _uReset
+        | OnFail |> _stateFailed;
+
+    // Success only by the 5-component readback after OnWritten.
+    _okIdle = switch (OpStage <- 0)
+        | OnFail |> _stateFailed;
+    _okSeq = switch (ResultSeq <- OpSeq)
+        | OnWritten |> _okIdle
+        | OnFail |> _stateFailed;
+    _okResult = switch (Result <- 1)
+        | OnWritten |> _okSeq
+        | OnFail |> _stateFailed;
+    _okApplied = switch (AppliedSeq <- OpSeq)
+        | OnWritten |> _okResult
+        | OnFail |> _stateFailed;
+    _accepted = switch (LastApplied <- PendingCandidate)
+        | OnWritten |> _okApplied
+        | OnFail |> _stateFailed;
+    // The value did not change (e.g. an unhooked Drive): idle again, FAILED; LastApplied/AppliedSeq not advanced.
+    _unSeq = switch (ResultSeq <- OpSeq)
+        | OnFail |> _stateFailed;
+    _unResult = switch (Result <- 20)
+        | OnWritten |> _unSeq
+        | OnFail |> _stateFailed;
+    _unapplied = switch (OpStage <- 0)
+        | OnWritten |> _unResult
+        | OnFail |> _stateFailed;
+    // Neither candidate nor previous: keep the stage, mark the row and the session for restore, FAILED.
+    _mmSeq = switch (ResultSeq <- OpSeq)
+        | OnFail |> _stateFailed;
+    _mmResult = switch (Result <- 20)
+        | OnWritten |> _mmSeq
+        | OnFail |> _stateFailed;
+    _mmRow = switch (RowPending <- true)
+        | OnWritten |> _mmResult
+        | OnFail |> _stateFailed;
+    _mismatch = switch (RecoveryPending <- true)
+        | OnWritten |> _mmRow
+        | OnFail |> _stateFailed;
+    _verify = if _freshIsCandidate then _accepted
+        else if _freshIsPrevious then _unapplied
+        else _mismatch;
+    _written = switch (OpStage <- 2)
+        | OnWritten |> _verify
+        | OnFail |> _stateFailed;
+    // Step 5 (OnFail of the Source write; per IL only a null Field, which the guard already refuses).
+    _sourceFailed = if _freshIsPrevious then _unapplied else _mismatch;
+
+    // Step 3: write-ahead record, then the Source (the only FieldAsVariable write of this module).
+    _wSource = switch (_source <- PendingCandidate)
+        | OnWritten |> _written
+        | OnFail |> _sourceFailed;
+    _wStage = switch (OpStage <- 1)
+        | OnWritten |> _wSource
+        | OnFail |> _stateFailed;
+    _wId = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _wStage
+        | OnFail |> _stateFailed;
+    _wSeq = switch (OpSeq <- _seq)
+        | OnWritten |> _wId
+        | OnFail |> _stateFailed;
+    _wKind = switch (OpKind <- 1)
+        | OnWritten |> _wSeq
+        | OnFail |> _stateFailed;
+    _wCandidate = switch (PendingCandidate <- Draft)
+        | OnWritten |> _wKind
+        | OnFail |> _stateFailed;
+    _wPrevious = switch (PendingPrevious <- LastApplied)
+        | OnWritten |> _wCandidate
+        | OnFail |> _stateFailed;
+    _wMarked = switch (PreviewWritten <- true)
+        | OnWritten |> _wPrevious
+        | OnFail |> _stateFailed;
+    _write = switch (PreviewActive <- true)
+        | OnWritten |> _wMarked
+        | OnFail |> _stateFailed;
+
+    // Permission: only the operator, during this edit session, while the target
+    // is still the captured field. No write after CLOSE was issued.
+    _allowed = Operator == LocalUser and UiReady and Ready and not Busy and ActiveGeneration and Selected
+        and SnapshotEpoch == EditEpoch and (Intent == 0 or (Intent == 1 and CommandKind == 1))
+        and not RecoveryPending and not RowPending and OpStage == 0 and _guard;
+    // Order: invalid, unchanged, permission, guard, conflict, write.
+    _evaluate = if not Valid then _rejInvalid
+        else if _draftIsLast then _unchanged
+        else if not _allowed then _rejBlocked
+        else if not _guard then _rejGuard
+        else if not _freshIsLast then _rejConflict
+        else _write;
+    // A newer request (InputSeq moved on) or a new edit session drops this one without writing anything.
+    _decide = if _seq == InputSeq and _epoch == EditEpoch then _evaluate;
+    _task = impulse {
+        bind _d = DelayWithValueSecondsFloat<int>(Value=InputSeq, Duration=0.15).Next;
+        bind _d1 = (_seq <- _d.DelayedValue).OnWritten;
+        _decide;
+    };
+    // Every change by the operator advances InputSeq (an invalid input also invalidates the waiting request).
+    _start = StartAsyncTask(TaskStart=_task);
+    _request = if Operator == LocalUser and ActiveGeneration then impulse {
+        bind _rq0 = (_epoch <- EditEpoch).OnWritten;
+        switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq)
+        | OnWritten |> _start
+        | OnFail |> _stateFailed;
+    };
+
+    FireOnObjectValueChange<string>(OnlyForUser=Operator, Value=InputR, OnChanged=_request);
+    FireOnObjectValueChange<string>(OnlyForUser=Operator, Value=InputG, OnChanged=_request);
+    FireOnObjectValueChange<string>(OnlyForUser=Operator, Value=InputB, OnChanged=_request);
+}

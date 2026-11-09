@@ -1,0 +1,53 @@
+module BeginRow
+// Issue #6: capture the selected row's dropped field. CapturedField is the
+// editing target; a later drop into the row does not change the target of an
+// open record. The capture writes only panel-owned fields, never the material.
+in SourceField: FrooxEngine.IValue<colorX>
+in CapturedField: FrooxEngine.IValue<colorX> mutable
+in Registered: bool
+in Duplicate: bool
+in ActiveGeneration: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Selected: bool
+in EditEpoch: int
+in SnapshotEpoch: int mutable
+in Original: colorX mutable
+in LastApplied: colorX mutable
+in PreviewWritten: bool
+in RecoveryPending: bool
+in OperationStage: int
+in OpStage: int
+in RowPending: bool
+in InputR: string mutable
+in InputG: string mutable
+in InputB: string mutable
+in InputSeq: int mutable
+in AppliedSeq: int mutable
+in ResultSeq: int mutable
+in Result: int mutable
+out Current: colorX
+where {
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
+    Current = _fresh;
+    _fieldOk = not IsNull<FrooxEngine.IValue<colorX>>(Instance=SourceField);
+    _parts = Unpack_ColorX(V=_fresh);
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+    _capture = if Registered and not Duplicate and ActiveGeneration and UiReady
+        and Operator == LocalUser and Selected and SnapshotEpoch != EditEpoch
+        and not PreviewWritten and not RecoveryPending and OperationStage == 0
+        and OpStage == 0 and not RowPending and _fieldOk then impulse {
+        bind _captured = (CapturedField <- SourceField).OnWritten;
+        bind _original = (Original <- _fresh).OnWritten;
+        bind _last = (LastApplied <- Original).OnWritten;
+        bind _r = (InputR <- ToString_Float(V=_parts.R, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _g = (InputG <- ToString_Float(V=_parts.G, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _b = (InputB <- ToString_Float(V=_parts.B, Format="R", FormatProvider=_culture)).OnWritten;
+        bind _inputSeq = ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq).OnWritten;
+        bind _appliedSeq = (AppliedSeq <- InputSeq).OnWritten;
+        bind _resultSeq = (ResultSeq <- InputSeq).OnWritten;
+        bind _result = (Result <- 0).OnWritten;
+        SnapshotEpoch <- EditEpoch;
+    };
+    FireOnValueChange<int>(OnlyForUser=Operator, Value=EditEpoch, OnChanged=_capture);
+}

@@ -1,0 +1,74 @@
+module RowGuard
+// Issue #6: minimal per-row registration and selection. The dropped reference
+// is a typed IValue<colorX>, so no component cast is needed. Duplicate
+// detection and the drop-status event are intentionally omitted after the live
+// isolation in Issue #6; a row drop is disabled while the row is selected or
+// has an open record.
+in Dropped: FrooxEngine.IValue<colorX>
+in RowIndex: int
+in RowLabel: string
+in SelectButton: FrooxEngine.UIX.Button element
+in AvatarRoot: FrooxEngine.Slot
+in RootReady: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Ready: bool
+in Busy: bool
+in Intent: int
+in OperationStage: int
+in PreviewActive: bool
+in RecoveryPending: bool
+in SelectedRow: int mutable
+in SelectedRoot: FrooxEngine.Slot mutable
+in EditEpoch: int mutable
+in Status: string mutable
+in Result: int
+in PreviewWritten: bool
+in RowPending: bool
+in OpStage: int
+in SnapshotEpoch: int
+out Registered: bool
+out ValidField: bool
+out Duplicate: bool
+out Selected: bool
+out CanSelect: bool
+out CanEdit: bool
+out DropEnabled: bool
+out Visible: bool
+out NameText: string
+out RegistrationStatus: string
+where {
+    Registered = not IsNull<FrooxEngine.IValue<colorX>>(Instance=Dropped);
+    ValidField = Registered;
+    Duplicate = false;
+    Selected = SelectedRow == RowIndex and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot)
+        and SelectedRoot == AvatarRoot;
+    _rootOk = RootReady and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot);
+    CanSelect = Registered and _rootOk and UiReady and Ready and not Busy
+        and Operator == LocalUser;
+    _record = PreviewWritten or RowPending or OpStage != 0;
+    CanEdit = Selected and Registered and UiReady and Ready and not Busy
+        and Operator == LocalUser and not RecoveryPending and OperationStage == 0
+        and SnapshotEpoch == EditEpoch and not RowPending and OpStage == 0;
+    DropEnabled = _rootOk and UiReady and Ready and not Busy and Operator == LocalUser
+        and Intent == 0 and OperationStage == 0 and not RecoveryPending
+        and not _record and not Selected;
+    Visible = true;
+    NameText = RowLabel;
+    RegistrationStatus = if not Registered then "EmissionColor をここへドロップ"
+        else if not RootReady then "先にアバターの Root をドロップ"
+        else "";
+    _select = if CanSelect then
+        if OperationStage != 0 then Status <- "使用中 · 処理中です。完了まで待ってください"
+        else if RecoveryPending then Status <- "使用中 · 復元が未完了の行があります。元に戻す／キャンセルで再試行するか、その行の『現在値を受け入れて閉じる』で記録を閉じてください"
+        else if PreviewActive or Intent != 0 then Status <- "使用中 · 未確定のプレビューがあります。OK で確定するか、元に戻す・キャンセルの後に切り替えてください"
+        else if not Selected then impulse {
+            bind _row = (SelectedRow <- RowIndex).OnWritten;
+            bind _root = (SelectedRoot <- AvatarRoot).OnWritten;
+            bind _epoch = (EditEpoch <- EditEpoch + 1).OnWritten;
+            Status <- "使用中 · 編集対象の行を選択しました";
+        }
+        else Status <- "使用中 · この行は選択済みです";
+    _button = as<FrooxEngine.IButton>(SelectButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_select);
+}

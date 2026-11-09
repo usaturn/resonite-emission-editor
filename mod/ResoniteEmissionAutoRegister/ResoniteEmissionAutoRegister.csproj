@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ResoniteEmissionAutoRegister</AssemblyName>
+    <RootNamespace>ResoniteEmissionAutoRegister</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ResoniteModLoader" Version="5.0.2" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Lib.Harmony" Version="2.4.3" PrivateAssets="all" ExcludeAssets="runtime" />
+    <Reference Include="FrooxEngine">
+      <HintPath>$(ResonitePath)FrooxEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Elements.Core">
+      <HintPath>$(ResonitePath)Elements.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Elements.Data">
+      <HintPath>$(ResonitePath)Elements.Data.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

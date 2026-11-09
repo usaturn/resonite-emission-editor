@@ -1,0 +1,355 @@
+module RowCommand
+// Issue #6: per-row command handler for the field dropped by the user. The
+// editing target is CapturedField; the renderer/use guard of Issue #3 is not
+// available natively, so the guard is the captured field identity. CHECK,
+// CLOSE, STATUS and the accept press never write the Source; RESTORE is the
+// only Source write and succeeds only by the 5-component readback.
+in ActiveGeneration: bool
+in Selected: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Ready: bool
+in Busy: bool
+in Intent: int mutable
+in OperationStage: int mutable
+in EditEpoch: int
+in SnapshotEpoch: int mutable
+in CommandUser: FrooxEngine.User
+in CommandSeq: int
+in CommandKind: int
+in Valid: bool
+in Draft: colorX
+in Original: colorX
+in SourceField: FrooxEngine.IValue<colorX>
+in CapturedField: FrooxEngine.IValue<colorX>
+in Registered: bool
+in Duplicate: bool
+in AcceptButton: FrooxEngine.UIX.Button element
+in LastApplied: colorX mutable
+in PreviewWritten: bool mutable
+in RecoveryPending: bool mutable
+in RowPending: bool mutable
+in InputSeq: int mutable
+in AppliedSeq: int mutable
+in Result: int mutable
+in ResultSeq: int
+in OpStage: int mutable
+in OpKind: int mutable
+in OpSeq: int mutable
+in OpId: int mutable
+in PendingPrevious: colorX mutable
+in PendingCandidate: colorX mutable
+in AckSeq: int mutable
+in InputR: string mutable
+in InputG: string mutable
+in InputB: string mutable
+in AckRemaining: int mutable
+in AckWait: int mutable
+in AckRefuse: int mutable
+in AckFail: int mutable
+out CanAccept: bool
+where {
+    // Result codes: 0 UNCHANGED, 1 PREVIEWED, 2 RESTORED, 3 COMMITTED, 4 ACCEPTED, 10 INVALID, 11 BLOCKED,
+    // 12 CONFLICT, 13 GUARD, 20 FAILED, 21 STATE_FAILED. CommandKind: 1 CHECK, 2 CLOSE, 3 RESTORE, 4 STATUS.
+    // OpStage: 0 idle, 1 prepared (may have written), 2 OnWritten received. OpKind: 1 preview, 2 restore.
+    _source = FieldAsVariable<colorX>(Field=CapturedField);
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(CapturedField));
+    _culture = as<System.IFormatProvider>(InvariantCulture);
+
+    // eq(a, b): R, G, B, A and Profile compared individually (never colorX == alone).
+    _dp = Unpack_ColorX(V=Draft);
+    _lp = Unpack_ColorX(V=LastApplied);
+    _fp = Unpack_ColorX(V=_fresh);
+    _cp = Unpack_ColorX(V=PendingCandidate);
+    _pp = Unpack_ColorX(V=PendingPrevious);
+    _op = Unpack_ColorX(V=Original);
+    _draftIsLast = _dp.R == _lp.R and _dp.G == _lp.G and _dp.B == _lp.B and _dp.A == _lp.A and _dp.Profile == _lp.Profile;
+    _freshIsLast = _fp.R == _lp.R and _fp.G == _lp.G and _fp.B == _lp.B and _fp.A == _lp.A and _fp.Profile == _lp.Profile;
+    _freshIsCandidate = _fp.R == _cp.R and _fp.G == _cp.G and _fp.B == _cp.B and _fp.A == _cp.A
+        and _fp.Profile == _cp.Profile;
+    _freshIsPrevious = _fp.R == _pp.R and _fp.G == _pp.G and _fp.B == _pp.B and _fp.A == _pp.A
+        and _fp.Profile == _pp.Profile;
+    _freshIsOriginal = _fp.R == _op.R and _fp.G == _op.G and _fp.B == _op.B and _fp.A == _op.A
+        and _fp.Profile == _op.Profile;
+
+    // The editing target must still be the field captured for this row.
+    _guard = Registered and not Duplicate
+        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=CapturedField);
+
+    // Shorthands. A guard failure (null or changed target, duplicate, unregistered)
+    // is treated like the Issue #3 null-Source refusal.
+    _sourceNull = not _guard;
+    _record = PreviewWritten or RowPending or OpStage != 0;
+    _waiting = AppliedSeq != InputSeq and ResultSeq != InputSeq;
+    _editing = Selected and SnapshotEpoch == EditEpoch;
+
+    // CanAccept and the press condition are the same expression.
+    _acceptAllowed = Operator == LocalUser and ActiveGeneration and UiReady and Ready and not Busy and Intent == 0
+        and OperationStage == 0 and RowPending;
+    CanAccept = _acceptAllowed;
+
+    local _seq: int;
+
+    // Responses: counted only while the command is still current (CommandSeq == seq); counter first, then remaining.
+    _ackDone = ValueDecrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=AckRemaining);
+    _respondOk = if CommandSeq == _seq then _ackDone;
+    _respondWait = if CommandSeq == _seq then switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=AckWait)
+        | OnWritten |> _ackDone;
+    _respondRefuse = if CommandSeq == _seq then switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=AckRefuse)
+        | OnWritten |> _ackDone;
+    _respondFail = if CommandSeq == _seq then switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=AckFail)
+        | OnWritten |> _ackDone;
+
+    // 21 path: try Result <- 21 first, then RecoveryPending and RowPending regardless of the outcome;
+    // the answer stays FAIL (or REFUSE), never OK.
+    _f21Row = switch (RowPending <- true)
+        | OnWritten |> _respondFail
+        | OnFail |> _respondFail;
+    _f21Flags = switch (RecoveryPending <- true)
+        | OnWritten |> _f21Row
+        | OnFail |> _f21Row;
+    _fail21 = switch (Result <- 21)
+        | OnWritten |> _f21Flags
+        | OnFail |> _f21Flags;
+    _r21Row = switch (RowPending <- true)
+        | OnWritten |> _respondRefuse
+        | OnFail |> _respondRefuse;
+    _r21Flags = switch (RecoveryPending <- true)
+        | OnWritten |> _r21Row
+        | OnFail |> _r21Row;
+    _refuse21 = switch (Result <- 21)
+        | OnWritten |> _r21Flags
+        | OnFail |> _r21Flags;
+
+    // ---- CHECK: first match. A refusal keeps the reason already in the row's Result.
+    // A row with a record and a changed/duplicate target is refused (GUARD) before ValueSource is compared.
+    _ckRecord = if _sourceNull then _respondRefuse
+        else if not _freshIsLast then _respondRefuse
+        else _respondOk;
+    _check = if RowPending then _respondRefuse
+        else if OpStage != 0 then _respondWait
+        else if _editing and _waiting then _respondWait
+        else if _editing and not Valid then _respondRefuse
+        else if _editing and not _draftIsLast then _respondRefuse
+        else if _record then _ckRecord
+        else _respondOk;
+
+    // ---- CLOSE: record rows only: COMMITTED -> SnapshotEpoch -1 -> PreviewWritten false (last);
+    // then _invalidate for every row. Never OK on a guard failure.
+    _clApplied = switch (AppliedSeq <- InputSeq)
+        | OnWritten |> _respondOk
+        | OnFail |> _respondFail;
+    _clInvalidate = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq)
+        | OnWritten |> _clApplied
+        | OnFail |> _respondFail;
+    _clMarked = switch (PreviewWritten <- false)
+        | OnWritten |> _clInvalidate
+        | OnFail |> _fail21;
+    _clEpoch = switch (SnapshotEpoch <- -1)
+        | OnWritten |> _clMarked
+        | OnFail |> _fail21;
+    _clCommit = switch (Result <- 3)
+        | OnWritten |> _clEpoch
+        | OnFail |> _fail21;
+    _clRecord = if _sourceNull then _respondRefuse
+        else if not _freshIsLast then _respondRefuse
+        else _clCommit;
+    _closeCommand = if RowPending or OpStage != 0 then _respondRefuse
+        else if _editing and (_waiting or not Valid or not _draftIsLast) then _respondRefuse
+        else if _record then _clRecord
+        else _clInvalidate;
+
+    // ---- RESTORE. Flags RecoveryPending -> RowPending, then Result.
+    _rgResult = switch (Result <- 13)
+        | OnWritten |> _respondRefuse
+        | OnFail |> _refuse21;
+    _rgRow = switch (RowPending <- true)
+        | OnWritten |> _rgResult
+        | OnFail |> _refuse21;
+    _refuseGuard = switch (RecoveryPending <- true)
+        | OnWritten |> _rgRow
+        | OnFail |> _refuse21;
+    _rcfResult = switch (Result <- 12)
+        | OnWritten |> _respondRefuse
+        | OnFail |> _refuse21;
+    _rcfRow = switch (RowPending <- true)
+        | OnWritten |> _rcfResult
+        | OnFail |> _refuse21;
+    _refuseConflict = switch (RecoveryPending <- true)
+        | OnWritten |> _rcfRow
+        | OnFail |> _refuse21;
+    _rfResult = switch (Result <- 20)
+        | OnWritten |> _respondFail
+        | OnFail |> _fail21;
+    _rfRow = switch (RowPending <- true)
+        | OnWritten |> _rfResult
+        | OnFail |> _fail21;
+    _restoreFailed = switch (RecoveryPending <- true)
+        | OnWritten |> _rfRow
+        | OnFail |> _fail21;
+
+    // _close(Original): LastApplied -> OpStage 0 -> RowPending false -> inputs -> PreviewWritten false (last).
+    _ccResult = switch (Result <- 2)
+        | OnWritten |> _respondOk
+        | OnFail |> _fail21;
+    _ccMarked = switch (PreviewWritten <- false)
+        | OnWritten |> _ccResult
+        | OnFail |> _fail21;
+    _ccB = switch (InputB <- ToString_Float(V=_op.B, Format="R", FormatProvider=_culture))
+        | OnWritten |> _ccMarked
+        | OnFail |> _fail21;
+    _ccG = switch (InputG <- ToString_Float(V=_op.G, Format="R", FormatProvider=_culture))
+        | OnWritten |> _ccB
+        | OnFail |> _fail21;
+    _ccR = switch (InputR <- ToString_Float(V=_op.R, Format="R", FormatProvider=_culture))
+        | OnWritten |> _ccG
+        | OnFail |> _fail21;
+    _ccRow = switch (RowPending <- false)
+        | OnWritten |> _ccR
+        | OnFail |> _fail21;
+    _ccIdle = switch (OpStage <- 0)
+        | OnWritten |> _ccRow
+        | OnFail |> _fail21;
+    _closeOriginal = switch (LastApplied <- Original)
+        | OnWritten |> _ccIdle
+        | OnFail |> _fail21;
+
+    // current == Original (5 components): close without writing the Source (OpId++ if an operation was open).
+    _rsSame = if OpStage != 0 then switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _closeOriginal
+        | OnFail |> _fail21
+        else _closeOriginal;
+
+    // Write-ahead record, then the Source (the only FieldAsVariable write of this module), then the readback.
+    _rsUnapplied = switch (OpStage <- 0)
+        | OnWritten |> _restoreFailed
+        | OnFail |> _fail21;
+    _rsVerify = if _freshIsOriginal then _closeOriginal
+        else if _freshIsPrevious then _rsUnapplied
+        else _restoreFailed;
+    _rsWritten = switch (OpStage <- 2)
+        | OnWritten |> _rsVerify
+        | OnFail |> _fail21;
+    _rsSourceFailed = if _freshIsPrevious then _rsUnapplied else _restoreFailed;
+    _rsSource = switch (_source <- Original)
+        | OnWritten |> _rsWritten
+        | OnFail |> _rsSourceFailed;
+    _rsStage = switch (OpStage <- 1)
+        | OnWritten |> _rsSource
+        | OnFail |> _fail21;
+    _rsId = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _rsStage
+        | OnFail |> _fail21;
+    _rsSeq = switch (OpSeq <- InputSeq)
+        | OnWritten |> _rsId
+        | OnFail |> _fail21;
+    _rsKind = switch (OpKind <- 2)
+        | OnWritten |> _rsSeq
+        | OnFail |> _fail21;
+    _rsCandidate = switch (PendingCandidate <- Original)
+        | OnWritten |> _rsKind
+        | OnFail |> _fail21;
+    _rsWrite = switch (PendingPrevious <- LastApplied)
+        | OnWritten |> _rsCandidate
+        | OnFail |> _fail21;
+
+    // Captured-field identity guard (13), current == LastApplied (12), otherwise write.
+    _rsChecked = if not _guard then _refuseGuard
+        else if not _freshIsLast then _refuseConflict
+        else _rsWrite;
+
+    // An open operation is reconciled first (OpId++ every time): current == Candidate -> reflected
+    // (LastApplied <- Candidate), == Previous -> not reflected, otherwise CONFLICT.
+    _rnReflectedId = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _rsChecked
+        | OnFail |> _fail21;
+    _rnReflected = switch (LastApplied <- PendingCandidate)
+        | OnWritten |> _rnReflectedId
+        | OnFail |> _fail21;
+    _rnUnreflected = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _rsChecked
+        | OnFail |> _fail21;
+    _rnConflict = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _refuseConflict
+        | OnFail |> _fail21;
+    _reconcile = if _freshIsCandidate then _rnReflected
+        else if _freshIsPrevious then _rnUnreflected
+        else _rnConflict;
+
+    // no record -> OK; guard failure before the null refusal; current == Original; reconcile; checked.
+    _rsBody = if not _record then _respondOk
+        else if _sourceNull then _refuseGuard
+        else if _freshIsOriginal then _rsSame
+        else if OpStage != 0 then _reconcile
+        else _rsChecked;
+    // Entry _invalidate (InputSeq++ -> AppliedSeq <- InputSeq) whatever the branch.
+    _rsApplied = switch (AppliedSeq <- InputSeq)
+        | OnWritten |> _rsBody
+        | OnFail |> _respondFail;
+    _restore = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq)
+        | OnWritten |> _rsApplied
+        | OnFail |> _respondFail;
+
+    // ---- STATUS: writes nothing but AckSeq and the counters.
+    _status = if RowPending or OpStage != 0 then _respondRefuse
+        else if PreviewWritten then _respondWait
+        else _respondOk;
+
+    // ---- Command entry.
+    _kindMatches = (Intent == 1 and (CommandKind == 1 or CommandKind == 2))
+        or ((Intent == 2 or Intent == 3 or Intent == 4) and CommandKind == 3)
+        or (Intent == 5 and CommandKind == 4);
+    _dispatch = if CommandKind == 1 then _check
+        else if CommandKind == 2 then _closeCommand
+        else if CommandKind == 3 then _restore
+        else if CommandKind == 4 then _status;
+    _acked = switch (AckSeq <- _seq)
+        | OnWritten |> _dispatch;
+    _command = if ActiveGeneration and CommandUser == LocalUser and AckSeq != CommandSeq and _kindMatches then impulse {
+        bind _cm0 = (_seq <- CommandSeq).OnWritten;
+        _acked;
+    };
+
+    // ---- 現在値を受け入れて閉じる. Never reads or writes the Source, Original,
+    // LastApplied, the inputs, PreviewActive or RecoveryPending.
+    _acStageBack = OperationStage <- 0;
+    _acIntent = switch (Intent <- 5)
+        | OnFail |> _acStageBack;
+    _afRow = switch (RowPending <- true)
+        | OnWritten |> _acIntent
+        | OnFail |> _acIntent;
+    _acceptFailed = switch (Result <- 21)
+        | OnWritten |> _afRow
+        | OnFail |> _afRow;
+    _acApplied = switch (AppliedSeq <- InputSeq)
+        | OnWritten |> _acIntent
+        | OnFail |> _acIntent;
+    _acInvalidate = switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=InputSeq)
+        | OnWritten |> _acApplied
+        | OnFail |> _acIntent;
+    _acMarked = switch (PreviewWritten <- false)
+        | OnWritten |> _acInvalidate
+        | OnFail |> _acceptFailed;
+    _acRow = switch (RowPending <- false)
+        | OnWritten |> _acMarked
+        | OnFail |> _acceptFailed;
+    _acResult = switch (Result <- 4)
+        | OnWritten |> _acRow
+        | OnFail |> _acceptFailed;
+    _acIdle = switch (OpStage <- 0)
+        | OnWritten |> _acResult
+        | OnFail |> _acceptFailed;
+    _acId = if OpStage != 0 then switch ValueIncrement<FrooxEngine.ProtoFlux.FrooxEngineContext,int>(Variable=OpId)
+        | OnWritten |> _acIdle
+        | OnFail |> _acceptFailed
+        else _acIdle;
+    _accept = switch (SnapshotEpoch <- -1)
+        | OnWritten |> _acId
+        | OnFail |> _acceptFailed;
+    _acceptPress = if _acceptAllowed then switch (OperationStage <- 1)
+        | OnWritten |> _accept;
+
+    FireOnValueChange<int>(OnlyForUser=CommandUser, Value=CommandSeq, OnChanged=_command);
+    _acceptButton = as<FrooxEngine.IButton>(AcceptButton);
+    ButtonEvents(Button=asDrivenGlobal(_acceptButton), Pressed=_acceptPress);
+}
