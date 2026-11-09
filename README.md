@@ -99,6 +99,30 @@ uv run python -m scripts.emission_editor.registrable finalize \
 
 1 行でドロップ・選択・RGB 編集・元に戻す・OK を確認できてから、`--rows 8`、`--rows 16` の順に増やします。16 行を一度に作らないでください。
 
+### カスタムmodによる自動登録
+
+純粋な ProtoFlux は Slot 内の Component や材質フィールドを列挙できないため、native 方式では材質ごとにインスペクターから参照をドロップする必要があります。これを自動化するには、Resonite 内で動くカスタム mod を使います。
+
+- ソース: `mod/ResoniteEmissionAutoRegister/`
+- ビルド: `dotnet build -c Release -p:ResonitePath="$RESONITE_MANAGED_DATA_PATH/"`
+- 出力: `mod/ResoniteEmissionAutoRegister/bin/Release/net10.0/ResoniteEmissionAutoRegister.dll`
+- 前提: ResoniteModLoader 5.0.2。`ResoniteModLoader.dll` を `Libraries`、`0Harmony.dll` を `rml_libs` に置き、起動オプションへ `-LoadAssembly Libraries/ResoniteModLoader.dll` を追加し、mod DLL を `rml_mods` に置きます。
+
+使い方:
+
+1. パネル（名前が `ResoLoop_Test_EmissionEditor_Registrable_` で始まる）をワールドに出す。
+2. 「編集を開始」を押し、アバターの Root をパネルへドロップする。
+3. mod がアバターの MeshRenderer / SkinnedMeshRenderer と材質を読み、空の行へ `EmissionColor` を自動で設定します。行の名前は材質名になります。
+4. 行を選択して、RGB 編集・元に戻す・キャンセル・OK を使います。
+
+mod の制限:
+
+- パネルの**空の行だけ**を埋めます。既に登録した行は上書きしません。
+- 対象は名前が `ResoLoop_Test_EmissionEditor_Registrable_` で始まるパネルだけです。
+- `XiexeToonMaterial` の `EmissionColor` だけを対象にします。16 行を超える材質は登録しません。
+- アバターや材質の値は変更しません。書き込むのはパネル内の参照と表示名だけです。
+- mod は ResoniteModLoader と DLL の導入が必要で、Resonite の版が変わったら再ビルド・互換性確認が必要です。
+
 ### 使い方
 
 1. パネルを取り出し、「編集を開始」で操作者を取得します。
