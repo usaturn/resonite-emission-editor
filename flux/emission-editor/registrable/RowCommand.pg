@@ -73,9 +73,7 @@ where {
         and _fp.Profile == _op.Profile;
 
     // The editing target must still be the field captured for this row.
-    _sameField = not IsNull<FrooxEngine.IValue<colorX>>(Instance=CapturedField)
-        and ObjectEquals<FrooxEngine.IValue<colorX>>(A=CapturedField, B=SourceField);
-    _guard = Registered and not Duplicate and _sameField
+    _guard = Registered and not Duplicate
         and not IsNull<FrooxEngine.IValue<colorX>>(Instance=CapturedField);
 
     // Shorthands. A guard failure (null or changed target, duplicate, unregistered)

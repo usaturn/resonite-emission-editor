@@ -1,24 +1,10 @@
 module RowGuard
-// Issue #6: per-row registration and selection. A row receives one dropped
-// reference; only a colorX value field is valid, and the same reference may be
-// registered in one row only. The module writes no material value.
+// Issue #6: minimal per-row registration and selection. The dropped reference
+// is a typed IValue<colorX>, so no component cast is needed. Duplicate
+// detection and the drop-status event are intentionally omitted after the live
+// isolation in Issue #6; a row drop is disabled while the row is selected or
+// has an open record.
 in Dropped: FrooxEngine.IValue<colorX>
-in Other0: FrooxEngine.IValue<colorX>
-in Other1: FrooxEngine.IValue<colorX>
-in Other2: FrooxEngine.IValue<colorX>
-in Other3: FrooxEngine.IValue<colorX>
-in Other4: FrooxEngine.IValue<colorX>
-in Other5: FrooxEngine.IValue<colorX>
-in Other6: FrooxEngine.IValue<colorX>
-in Other7: FrooxEngine.IValue<colorX>
-in Other8: FrooxEngine.IValue<colorX>
-in Other9: FrooxEngine.IValue<colorX>
-in Other10: FrooxEngine.IValue<colorX>
-in Other11: FrooxEngine.IValue<colorX>
-in Other12: FrooxEngine.IValue<colorX>
-in Other13: FrooxEngine.IValue<colorX>
-in Other14: FrooxEngine.IValue<colorX>
-in Other15: FrooxEngine.IValue<colorX>
 in RowIndex: int
 in RowLabel: string
 in SelectButton: FrooxEngine.UIX.Button element
@@ -54,45 +40,25 @@ out RegistrationStatus: string
 where {
     Registered = not IsNull<FrooxEngine.IValue<colorX>>(Instance=Dropped);
     ValidField = Registered;
-    Duplicate = Registered and (
-        ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other0)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other1)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other2)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other3)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other4)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other5)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other6)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other7)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other8)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other9)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other10)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other11)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other12)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other13)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other14)
-        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other15));
+    Duplicate = false;
     Selected = SelectedRow == RowIndex and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot)
         and SelectedRoot == AvatarRoot;
     _rootOk = RootReady and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot);
-    CanSelect = ValidField and not Duplicate and _rootOk and UiReady and Ready and not Busy
+    CanSelect = Registered and _rootOk and UiReady and Ready and not Busy
         and Operator == LocalUser;
     _record = PreviewWritten or RowPending or OpStage != 0;
-    CanEdit = Selected and ValidField and not Duplicate and UiReady and Ready and not Busy
+    CanEdit = Selected and Registered and UiReady and Ready and not Busy
         and Operator == LocalUser and not RecoveryPending and OperationStage == 0
         and SnapshotEpoch == EditEpoch and not RowPending and OpStage == 0;
     DropEnabled = _rootOk and UiReady and Ready and not Busy and Operator == LocalUser
-        and Intent == 0 and OperationStage == 0 and not RecoveryPending and not _record;
+        and Intent == 0 and OperationStage == 0 and not RecoveryPending
+        and not _record and not Selected;
     Visible = true;
-    _registeredText = if not Registered then "未登録（EmissionColor をドロップ）"
-        else if Duplicate then "重複した参照です"
-        else "登録済み";
-    NameText = ConcatenateString(A=ConcatenateString(A=RowLabel, B=" · "), B=_registeredText);
+    NameText = RowLabel;
     RegistrationStatus = if not Registered then "EmissionColor をここへドロップ"
-        else if Duplicate then "同じフィールドが別の行に登録済みです"
         else if not RootReady then "先にアバターの Root をドロップ"
         else "";
-    _selectable = CanSelect;
-    _select = if _selectable then
+    _select = if CanSelect then
         if OperationStage != 0 then Status <- "使用中 · 処理中です。完了まで待ってください"
         else if RecoveryPending then Status <- "使用中 · 復元が未完了の行があります。元に戻す／キャンセルで再試行するか、その行の『現在値を受け入れて閉じる』で記録を閉じてください"
         else if PreviewActive or Intent != 0 then Status <- "使用中 · 未確定のプレビューがあります。OK で確定するか、元に戻す・キャンセルの後に切り替えてください"
@@ -105,6 +71,4 @@ where {
         else Status <- "使用中 · この行は選択済みです";
     _button = as<FrooxEngine.IButton>(SelectButton);
     ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_select);
-    FireOnObjectValueChange<FrooxEngine.IValue<colorX>>(OnlyForUser=Operator, Value=Dropped,
-        OnChanged=if Registered then Status <- "材質フィールドを登録しました。行を選択して編集を開始してください");
 }

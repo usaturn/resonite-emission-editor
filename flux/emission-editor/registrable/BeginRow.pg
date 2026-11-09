@@ -31,11 +31,10 @@ where {
     _fresh = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
     Current = _fresh;
     _fieldOk = not IsNull<FrooxEngine.IValue<colorX>>(Instance=SourceField);
-    _changed = not ObjectEquals<FrooxEngine.IValue<colorX>>(A=SourceField, B=CapturedField);
     _parts = Unpack_ColorX(V=_fresh);
     _culture = as<System.IFormatProvider>(InvariantCulture);
     _capture = if Registered and not Duplicate and ActiveGeneration and UiReady
-        and Operator == LocalUser and Selected and (SnapshotEpoch != EditEpoch or _changed)
+        and Operator == LocalUser and Selected and SnapshotEpoch != EditEpoch
         and not PreviewWritten and not RecoveryPending and OperationStage == 0
         and OpStage == 0 and not RowPending and _fieldOk then impulse {
         bind _captured = (CapturedField <- SourceField).OnWritten;

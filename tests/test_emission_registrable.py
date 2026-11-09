@@ -38,7 +38,7 @@ def test_initial_panel_has_no_external_references():
     components = _components(panel)
     for key in (
         "ui-operator", "ui-selected-root", "ui-pending-root", "ui-null-root",
-        "ui-null-element", "ui-command-user", "ui-recover-target",
+        "ui-command-user", "ui-recover-target",
     ):
         assert _initial(components[key], "Reference") is None
     for i in range(registrable.POOL_ROWS):
@@ -58,12 +58,10 @@ def test_initial_panel_has_no_external_references():
     assert _initial(components["registry-ready"], "Value") is False
 
 
-def test_row_modules_are_isolated_and_self_duplicate_port_is_null():
+def test_row_modules_are_isolated():
     """Each row must be wired to its own dropped/captured fields.
 
     A cross-row binding would write one row's edit into another row's material.
-    The self port of the duplicate check must be null; otherwise every row would
-    consider itself a duplicate and the panel would never be usable.
     """
     import tempfile
 
@@ -86,11 +84,6 @@ def test_row_modules_are_isolated_and_self_duplicate_port_is_null():
                 for j in range(registrable.POOL_ROWS):
                     if j != i:
                         assert f"rp-{j}-" not in target, (p, suffix, target)
-        guard = modules[f"{p}-guard"]["bindings"]
-        assert guard[f"Other{i}"]["target"] == "$member:ui-null-element.Reference"
-        for j in range(registrable.POOL_ROWS):
-            if j != i:
-                assert guard[f"Other{j}"]["target"] == f"$member:rp-{j}-dropped.Reference"
 
 
 def test_row_pool_limit_is_rejected():

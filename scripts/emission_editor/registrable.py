@@ -218,7 +218,6 @@ def build_panel(*, token, position, rows=POOL_ROWS):
         _reference('ui-selected-root', 'Slot'),
         _reference('ui-pending-root', 'Slot'),
         _reference('ui-null-root', 'Slot'),
-        _reference_value('ui-null-element', IVALUE_COLORX),
         _state('ui-edit-epoch', 'int', 0),
         _state('ui-runtime-ready', 'bool', False),
         _state('ui-selected-row', 'int', -1),
@@ -342,14 +341,8 @@ def session_manifest(*, rows, world_state, deploy_state, source_directory, sourc
 
     for i in range(rows):
         p = f'rp-{i}'
-        others = {}
-        for j in range(POOL_ROWS):
-            others[f'Other{j}'] = (
-                field(f'rp-{j}-dropped') if j < rows and j != i else field('ui-null-element')
-            )
         add(p + '-guard', 'RowGuard', p, {
             'Dropped': field(p + '-dropped'),
-            **others,
             'RowIndex': src(p + '-index'),
             'RowLabel': src(p + '-label'),
             'SelectButton': sel(p + '-select-button'),
