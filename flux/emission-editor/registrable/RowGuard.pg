@@ -2,23 +2,23 @@ module RowGuard
 // Issue #6: per-row registration and selection. A row receives one dropped
 // reference; only a colorX value field is valid, and the same reference may be
 // registered in one row only. The module writes no material value.
-in Dropped: FrooxEngine.IWorldElement
-in Other0: FrooxEngine.IWorldElement
-in Other1: FrooxEngine.IWorldElement
-in Other2: FrooxEngine.IWorldElement
-in Other3: FrooxEngine.IWorldElement
-in Other4: FrooxEngine.IWorldElement
-in Other5: FrooxEngine.IWorldElement
-in Other6: FrooxEngine.IWorldElement
-in Other7: FrooxEngine.IWorldElement
-in Other8: FrooxEngine.IWorldElement
-in Other9: FrooxEngine.IWorldElement
-in Other10: FrooxEngine.IWorldElement
-in Other11: FrooxEngine.IWorldElement
-in Other12: FrooxEngine.IWorldElement
-in Other13: FrooxEngine.IWorldElement
-in Other14: FrooxEngine.IWorldElement
-in Other15: FrooxEngine.IWorldElement
+in Dropped: FrooxEngine.IValue<colorX>
+in Other0: FrooxEngine.IValue<colorX>
+in Other1: FrooxEngine.IValue<colorX>
+in Other2: FrooxEngine.IValue<colorX>
+in Other3: FrooxEngine.IValue<colorX>
+in Other4: FrooxEngine.IValue<colorX>
+in Other5: FrooxEngine.IValue<colorX>
+in Other6: FrooxEngine.IValue<colorX>
+in Other7: FrooxEngine.IValue<colorX>
+in Other8: FrooxEngine.IValue<colorX>
+in Other9: FrooxEngine.IValue<colorX>
+in Other10: FrooxEngine.IValue<colorX>
+in Other11: FrooxEngine.IValue<colorX>
+in Other12: FrooxEngine.IValue<colorX>
+in Other13: FrooxEngine.IValue<colorX>
+in Other14: FrooxEngine.IValue<colorX>
+in Other15: FrooxEngine.IValue<colorX>
 in RowIndex: int
 in RowLabel: string
 in SelectButton: FrooxEngine.UIX.Button element
@@ -52,26 +52,25 @@ out Visible: bool
 out NameText: string
 out RegistrationStatus: string
 where {
-    _field = as<FrooxEngine.IValue<colorX>>(Dropped);
-    Registered = not IsNull<FrooxEngine.IWorldElement>(Instance=Dropped);
-    ValidField = Registered and not IsNull<FrooxEngine.IValue<colorX>>(Instance=_field);
+    Registered = not IsNull<FrooxEngine.IValue<colorX>>(Instance=Dropped);
+    ValidField = Registered;
     Duplicate = Registered and (
-        ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other0)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other1)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other2)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other3)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other4)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other5)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other6)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other7)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other8)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other9)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other10)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other11)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other12)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other13)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other14)
-        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other15));
+        ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other0)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other1)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other2)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other3)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other4)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other5)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other6)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other7)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other8)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other9)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other10)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other11)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other12)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other13)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other14)
+        or ObjectEquals<FrooxEngine.IValue<colorX>>(A=Dropped, B=Other15));
     Selected = SelectedRow == RowIndex and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot)
         and SelectedRoot == AvatarRoot;
     _rootOk = RootReady and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot);
@@ -85,12 +84,10 @@ where {
         and Intent == 0 and OperationStage == 0 and not RecoveryPending and not _record;
     Visible = true;
     _registeredText = if not Registered then "未登録（EmissionColor をドロップ）"
-        else if not ValidField then "colorX フィールドではありません"
         else if Duplicate then "重複した参照です"
         else "登録済み";
     NameText = ConcatenateString(A=ConcatenateString(A=RowLabel, B=" · "), B=_registeredText);
     RegistrationStatus = if not Registered then "EmissionColor をここへドロップ"
-        else if not ValidField then "colorX の値フィールドではありません"
         else if Duplicate then "同じフィールドが別の行に登録済みです"
         else if not RootReady then "先にアバターの Root をドロップ"
         else "";
@@ -108,6 +105,6 @@ where {
         else Status <- "使用中 · この行は選択済みです";
     _button = as<FrooxEngine.IButton>(SelectButton);
     ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_select);
-    FireOnObjectValueChange<FrooxEngine.IWorldElement>(OnlyForUser=Operator, Value=Dropped,
+    FireOnObjectValueChange<FrooxEngine.IValue<colorX>>(OnlyForUser=Operator, Value=Dropped,
         OnChanged=if Registered then Status <- "材質フィールドを登録しました。行を選択して編集を開始してください");
 }

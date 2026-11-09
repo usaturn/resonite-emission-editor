@@ -21,6 +21,7 @@ from .slim_demo import CODE_ROOT, Demo, _save
 
 POOL_ROWS = 16
 ROW_HEIGHT = 200
+IVALUE_COLORX = ui.F + 'IValue<colorX>'
 
 # Copied by basename into an isolated compiler stage before deployment.
 MODULE_SOURCES = {
@@ -49,6 +50,10 @@ def _state(key, typ, initial):
 
 def _reference(key, typ):
     return ui.reference(key, typ)
+
+
+def _reference_value(key, typ):
+    return ui.node(key + '-slot', components=[ui.component(key, ui.F + 'ReferenceField<' + typ + '>')])
 
 
 def _field(key):
@@ -80,7 +85,7 @@ def _row_nodes(index, height):
     ]
     drop = ui.image(p + '-drop', 12, 36, 500, 54, [0.045, 0.11, 0.14, 1], hit=True)
     drop['components'].append(ui.component(
-        p + '-drop-receiver', ui.U + 'ReferenceReceiver<' + ui.F + 'IWorldElement>',
+        p + '-drop-receiver', ui.U + 'ReferenceReceiver<' + IVALUE_COLORX + '>',
         {'Reference': f'$member:{p}-dropped.Reference'},
     ))
     drop['components'].append(ui.component(p + '-drop-button', ui.U + 'Button'))
@@ -108,8 +113,8 @@ def _row_nodes(index, height):
         ))
 
     state = ui.node(p, children=[
-        ui.reference(p + '-dropped', 'IWorldElement'),
-        ui.reference(p + '-captured', 'IWorldElement'),
+        _reference_value(p + '-dropped', IVALUE_COLORX),
+        _reference_value(p + '-captured', IVALUE_COLORX),
         _state(p + '-index', 'int', index),
         _state(p + '-label', 'string', f'行 {index + 1:02d}'),
         _state(p + '-original', 'colorX', [0, 0, 0, 1]),
@@ -213,7 +218,7 @@ def build_panel(*, token, position, rows=POOL_ROWS):
         _reference('ui-selected-root', 'Slot'),
         _reference('ui-pending-root', 'Slot'),
         _reference('ui-null-root', 'Slot'),
-        _reference('ui-null-element', 'IWorldElement'),
+        _reference_value('ui-null-element', IVALUE_COLORX),
         _state('ui-edit-epoch', 'int', 0),
         _state('ui-runtime-ready', 'bool', False),
         _state('ui-selected-row', 'int', -1),

@@ -2,8 +2,8 @@ module BeginRow
 // Issue #6: capture the selected row's dropped field. CapturedField is the
 // editing target; a later drop into the row does not change the target of an
 // open record. The capture writes only panel-owned fields, never the material.
-in SourceField: FrooxEngine.IWorldElement
-in CapturedField: FrooxEngine.IWorldElement mutable
+in SourceField: FrooxEngine.IValue<colorX>
+in CapturedField: FrooxEngine.IValue<colorX> mutable
 in Registered: bool
 in Duplicate: bool
 in ActiveGeneration: bool
@@ -28,11 +28,10 @@ in ResultSeq: int mutable
 in Result: int mutable
 out Current: colorX
 where {
-    _field = as<FrooxEngine.IValue<colorX>>(SourceField);
-    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(_field));
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(SourceField));
     Current = _fresh;
-    _fieldOk = not IsNull<FrooxEngine.IValue<colorX>>(Instance=_field);
-    _changed = not ObjectEquals<FrooxEngine.IWorldElement>(A=SourceField, B=CapturedField);
+    _fieldOk = not IsNull<FrooxEngine.IValue<colorX>>(Instance=SourceField);
+    _changed = not ObjectEquals<FrooxEngine.IValue<colorX>>(A=SourceField, B=CapturedField);
     _parts = Unpack_ColorX(V=_fresh);
     _culture = as<System.IFormatProvider>(InvariantCulture);
     _capture = if Registered and not Duplicate and ActiveGeneration and UiReady

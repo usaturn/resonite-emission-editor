@@ -20,8 +20,8 @@ in InputG: string
 in InputB: string
 in Valid: bool
 in Draft: colorX
-in SourceField: FrooxEngine.IWorldElement
-in CapturedField: FrooxEngine.IWorldElement
+in SourceField: FrooxEngine.IValue<colorX>
+in CapturedField: FrooxEngine.IValue<colorX>
 in Registered: bool
 in Duplicate: bool
 in LastApplied: colorX mutable
@@ -42,9 +42,8 @@ in PendingCandidate: colorX mutable
 where {
     // Result codes: 0 UNCHANGED, 1 PREVIEWED, 10 INVALID, 11 BLOCKED, 12 CONFLICT, 13 GUARD,
     // 20 FAILED, 21 STATE_FAILED. OpStage: 0 idle, 1 prepared (may have written), 2 OnWritten received.
-    _field = as<FrooxEngine.IValue<colorX>>(CapturedField);
-    _source = FieldAsVariable<colorX>(Field=_field);
-    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(_field));
+    _source = FieldAsVariable<colorX>(Field=CapturedField);
+    _fresh = ValueSource<colorX>(Source=asDrivenGlobal(CapturedField));
 
     // eq(a, b): R, G, B, A and Profile compared individually (never colorX == alone).
     _dp = Unpack_ColorX(V=Draft);
@@ -62,10 +61,10 @@ where {
     // The editing target must still be the field captured for this row. If the
     // user dropped a different reference after selection, refuse (13) rather
     // than write to an unregistered target.
-    _sameField = not IsNull<FrooxEngine.IWorldElement>(Instance=CapturedField)
-        and ObjectEquals<FrooxEngine.IWorldElement>(A=CapturedField, B=SourceField);
+    _sameField = not IsNull<FrooxEngine.IValue<colorX>>(Instance=CapturedField)
+        and ObjectEquals<FrooxEngine.IValue<colorX>>(A=CapturedField, B=SourceField);
     _guard = Registered and not Duplicate and _sameField
-        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=_field);
+        and not IsNull<FrooxEngine.IValue<colorX>>(Instance=CapturedField);
 
     local _seq: int;
     local _epoch: int;
