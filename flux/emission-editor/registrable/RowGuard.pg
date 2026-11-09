@@ -1,0 +1,113 @@
+module RowGuard
+// Issue #6: per-row registration and selection. A row receives one dropped
+// reference; only a colorX value field is valid, and the same reference may be
+// registered in one row only. The module writes no material value.
+in Dropped: FrooxEngine.IWorldElement
+in Other0: FrooxEngine.IWorldElement
+in Other1: FrooxEngine.IWorldElement
+in Other2: FrooxEngine.IWorldElement
+in Other3: FrooxEngine.IWorldElement
+in Other4: FrooxEngine.IWorldElement
+in Other5: FrooxEngine.IWorldElement
+in Other6: FrooxEngine.IWorldElement
+in Other7: FrooxEngine.IWorldElement
+in Other8: FrooxEngine.IWorldElement
+in Other9: FrooxEngine.IWorldElement
+in Other10: FrooxEngine.IWorldElement
+in Other11: FrooxEngine.IWorldElement
+in Other12: FrooxEngine.IWorldElement
+in Other13: FrooxEngine.IWorldElement
+in Other14: FrooxEngine.IWorldElement
+in Other15: FrooxEngine.IWorldElement
+in RowIndex: int
+in RowLabel: string
+in SelectButton: FrooxEngine.UIX.Button element
+in AvatarRoot: FrooxEngine.Slot
+in RootReady: bool
+in Operator: FrooxEngine.User
+in UiReady: bool
+in Ready: bool
+in Busy: bool
+in Intent: int
+in OperationStage: int
+in PreviewActive: bool
+in RecoveryPending: bool
+in SelectedRow: int mutable
+in SelectedRoot: FrooxEngine.Slot mutable
+in EditEpoch: int mutable
+in Status: string mutable
+in Result: int
+in PreviewWritten: bool
+in RowPending: bool
+in OpStage: int
+in SnapshotEpoch: int
+out Registered: bool
+out ValidField: bool
+out Duplicate: bool
+out Selected: bool
+out CanSelect: bool
+out CanEdit: bool
+out DropEnabled: bool
+out Visible: bool
+out NameText: string
+out RegistrationStatus: string
+where {
+    _field = as<FrooxEngine.IValue<colorX>>(Dropped);
+    Registered = not IsNull<FrooxEngine.IWorldElement>(Instance=Dropped);
+    ValidField = Registered and not IsNull<FrooxEngine.IValue<colorX>>(Instance=_field);
+    Duplicate = Registered and (
+        ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other0)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other1)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other2)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other3)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other4)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other5)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other6)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other7)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other8)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other9)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other10)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other11)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other12)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other13)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other14)
+        or ObjectEquals<FrooxEngine.IWorldElement>(A=Dropped, B=Other15));
+    Selected = SelectedRow == RowIndex and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot)
+        and SelectedRoot == AvatarRoot;
+    _rootOk = RootReady and not IsNull<FrooxEngine.Slot>(Instance=AvatarRoot);
+    CanSelect = ValidField and not Duplicate and _rootOk and UiReady and Ready and not Busy
+        and Operator == LocalUser;
+    _record = PreviewWritten or RowPending or OpStage != 0;
+    CanEdit = Selected and ValidField and not Duplicate and UiReady and Ready and not Busy
+        and Operator == LocalUser and not RecoveryPending and OperationStage == 0
+        and SnapshotEpoch == EditEpoch and not RowPending and OpStage == 0;
+    DropEnabled = _rootOk and UiReady and Ready and not Busy and Operator == LocalUser
+        and Intent == 0 and OperationStage == 0 and not RecoveryPending and not _record;
+    Visible = true;
+    _registeredText = if not Registered then "未登録（EmissionColor をドロップ）"
+        else if not ValidField then "colorX フィールドではありません"
+        else if Duplicate then "重複した参照です"
+        else "登録済み";
+    NameText = ConcatenateString(A=ConcatenateString(A=RowLabel, B=" · "), B=_registeredText);
+    RegistrationStatus = if not Registered then "EmissionColor をここへドロップ"
+        else if not ValidField then "colorX の値フィールドではありません"
+        else if Duplicate then "同じフィールドが別の行に登録済みです"
+        else if not RootReady then "先にアバターの Root をドロップ"
+        else "";
+    _selectable = CanSelect;
+    _select = if _selectable then
+        if OperationStage != 0 then Status <- "使用中 · 処理中です。完了まで待ってください"
+        else if RecoveryPending then Status <- "使用中 · 復元が未完了の行があります。元に戻す／キャンセルで再試行するか、その行の『現在値を受け入れて閉じる』で記録を閉じてください"
+        else if PreviewActive or Intent != 0 then Status <- "使用中 · 未確定のプレビューがあります。OK で確定するか、元に戻す・キャンセルの後に切り替えてください"
+        else if not Selected then impulse {
+            bind _row = (SelectedRow <- RowIndex).OnWritten;
+            bind _root = (SelectedRoot <- AvatarRoot).OnWritten;
+            bind _epoch = (EditEpoch <- EditEpoch + 1).OnWritten;
+            Status <- "使用中 · 編集対象の行を選択しました";
+        }
+        else Status <- "使用中 · この行は選択済みです";
+    _button = as<FrooxEngine.IButton>(SelectButton);
+    ButtonEvents(Button=asDrivenGlobal(_button), Pressed=_select);
+    FireOnObjectValueChange<FrooxEngine.IWorldElement>(OnlyForUser=Operator, Value=Dropped,
+        OnChanged=if Registered then Status <- "材質フィールドを登録しました。行を選択して編集を開始してください");
+}

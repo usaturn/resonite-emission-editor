@@ -1,0 +1,22 @@
+module RootGuard
+// Issue #6: report and gate the avatar-root Slot dropped by the user. ProtoFlux
+// cannot inspect the AvatarRoot component, so this checks only null and the
+// world-Root name; the user confirms the actual avatar.
+in AvatarRoot: FrooxEngine.Slot
+in Operator: FrooxEngine.User
+in Status: string mutable
+out RootReady: bool
+out RootName: string
+where {
+    _null = IsNull<FrooxEngine.Slot>(Instance=AvatarRoot);
+    _name = if _null then "" else GetSlotName(Instance=AvatarRoot);
+    RootName = _name;
+    RootReady = not _null and _name != "Root";
+    FireOnRefChange<FrooxEngine.Slot>(OnlyForUser=Operator, Value=AvatarRoot,
+        OnChanged=if IsNull<FrooxEngine.Slot>(Instance=AvatarRoot) then
+            Status <- "アバターの Root をここへドロップしてください"
+        else if _name == "Root" then
+            Status <- "ワールドの Root は登録できません"
+        else
+            Status <- ConcatenateString(A="対象アバター: ", B=_name));
+}

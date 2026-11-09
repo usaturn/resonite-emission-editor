@@ -2,7 +2,7 @@
 
 Resonite のアバター EmissionColor を編集するツールの、実験中のソースです。
 
-旧CLI（`python -m scripts.emission_editor`）のlive inspect / register / unregisterは無効のままです。Issue #3で承認された単独パネル用の登録入口は、下記の`slim_live`です。登録時だけPCを使い、その後の通常操作はResonite内のnativeロジックで動きます。
+旧CLI（`python -m scripts.emission_editor`）のlive inspect / register / unregisterは無効のままです。Issue #3で承認された単独パネル用の登録入口は、下記の`slim_live`です。登録時だけPCを使い、その後の通常操作はResonite内のnativeロジックで動きます。Issue #6では、PCを使わずResonite内のドロップだけで登録する未登録パネルの入口を追加しました（下記「Issue #6: native 多段ドロップ登録」）。
 
 ## Issue #3: 最小実用版の作業範囲
 
@@ -54,6 +54,44 @@ uv run python -m scripts.emission_editor.slim_live observe \
 2材質・各2共有メッシュの独立した試験パネルを用意する場合は、同じ引数の`register --avatar ...`を`demo`へ変えます。`--avatar`は不要です。見出しは「複数行確認・新パネル [登録ID]」で、右側に2列×2個の見本が付きます。左列が1行目、右列が2行目です。実アバターや以前のパネルは変更しません。
 
 元機能の設計・実装計画は `docs/superpowers/` にあります。Issue #3の現在の作業・検証方針は、create-reso-worldの`docs/superpowers/specs/2026-11-07-emission-issue-3-native-gate-design.md`と対応Planに定義します。
+
+## Issue #6: native 多段ドロップ登録
+
+保存用の未登録パネルを作り、インベントリから取り出したパネルで、アバター Root と各材質の `EmissionColor` フィールドをドロップして登録します。登録時も編集時も PC 側 ResoLoop・Python・常駐プロセスは不要です。現行 ProtoFlux は Slot から任意の Component を列挙できないため、Issue #6 の当初案（Root を 1 回ドロップすると native が配下を自動列挙する）ではなく、利用者が選んだ多段ドロップ方式です。
+
+### 未登録パネルを作る
+
+コード checkout で、まだ存在しない checkout 外の出力先を指定します。
+
+```bash
+uv run python -m scripts.emission_editor.registrable create \
+  --url ws://localhost:<port> --library-path /absolute/current-managed-data \
+  --directory /absolute/new-registrable-directory --position 0 1.5 1.5
+```
+
+`create` は新しい所有ルートと 16 行の行プールを持つパネルを作り、native モジュールを validate / deploy したあと、最後に readiness を有効にします。材質・アバター・試験 fixture へは書き込みません。出力先の `deployment.json` に panel 名・root ID・行数・ready を保存します。
+
+作成したパネルは、**「編集を開始」を押す前**にインベントリへ保存してください。開始後は操作者参照がパネルに残るため、初期保存版の「操作者未取得」を保てません。
+
+### 使い方
+
+1. パネルを取り出し、「編集を開始」で操作者を取得します。
+2. 対象アバターの Root をアバターのドロップ領域へドロップします。表示名を確認してください。名前が `Root` の Slot は拒否します。
+3. 編集したい材質の `EmissionColor` フィールドを、行のドロップ領域へ 1 つずつドロップします。ドロップは参照を保存するだけで、色は変更しません。
+4. 行の「この行を選択」を押すと、元値・入力欄を捕捉します。RGB 入力でライブ反映、元に戻す、キャンセル、OK が使えます。
+5. プレビュー中は行を切り替えられません。OK か元に戻す・キャンセルのあとに選び直してください。
+6. 編集中の記録がある行は、その行のドロップ受付を無効にします。記録を閉じてから再登録してください。
+
+### 制限
+
+- 行は 16 行固定です。1 行 1 フィールドで、同じフィールドを 2 行へ登録することはできません。同じフィールドを別の行へドロップした場合は重複として表示し、その行は選択できません。
+- 受け付けるのは `colorX` の値フィールドだけです。`colorX` でない参照は拒否します。ただしフィールド名は native では検査できないため、`EmissionColor` 以外の `colorX` をドロップすると、そのフィールドを編集対象にしてしまいます。行へドロップする前に、インスペクターで `EmissionColor` であることを確認してください。
+- Root 配下の Renderer・材質の自動列挙、材質名、影響するメッシュ、外部共有先の走査、参照 ID 単位の材質重複排除はできません。共有材質はアバター外にも影響する場合があります。未走査を「外部共有なし」とは扱いません。
+- 登録処理はアバターの色・材質構成・親・メッシュを変更しません。書き込みは行を選択した後のプレビュー・復元・OK の経路だけです。
+- 保存・複製したパネルは、それぞれの行の参照と状態を独立して持ちます。別のパネルの内部状態へは接続しません。別ワールドへ持ち込んだ場合は参照が失効し得るため、Root とフィールドをドロップし直してください。
+- 二人操作・編集中の保存/退出からの完全復旧・全材質型/全表示条件は保証しません。実機でのドロップ・編集・復元・保存再読込・複製は、この実装だけでは未確認です。成功を装わず、確認結果を記録してください。
+
+既存の `slim_live register`（登録時だけ PC を使う方式）は残しています。どちらの入口を使うかは、登録に PC を使ってよいかで選んでください。
 
 ## 開発
 
